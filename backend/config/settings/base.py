@@ -125,6 +125,7 @@ OPENROUTESERVICE_BASE_URL = env(
 EXTERNAL_API_TIMEOUT = env.float("EXTERNAL_API_TIMEOUT", default=5.0)
 # Routing calls carry full geometries + alternatives; they get a longer budget.
 ROUTING_TIMEOUT = env.float("ROUTING_TIMEOUT", default=30.0)
+OSRM_BASE_URL = env("OSRM_BASE_URL", default="https://router.project-osrm.org")
 
 OPEN_METEO_BASE_URL = env(
     "OPEN_METEO_BASE_URL", default="https://api.open-meteo.com/v1/forecast"

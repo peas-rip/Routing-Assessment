@@ -1,5 +1,6 @@
 """Mock OpenRouteService payloads and shared builders for routing tests."""
 
+import re
 from datetime import timedelta
 from decimal import Decimal
 
@@ -8,7 +9,9 @@ from django.utils import timezone
 
 from apps.routing.models import Route, RouteRequest
 
-ORS_DIRECTIONS_URL = "https://api.openrouteservice.org/v2/directions/driving-hgv"
+# The active routing provider (OSRM) issues a GET whose path embeds the
+# coordinates; a regex matches any origin/destination pair in one registration.
+OSRM_ROUTE_URL = re.compile(r"https://router\.project-osrm\.org/route/v1/driving/.*")
 
 # docs/SERVICES/routing/TESTING.md fixture: 3 alternatives (distance in
 # meters, duration in seconds) with GeoJSON geometry.

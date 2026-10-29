@@ -16,7 +16,7 @@ class RoutingProviderError(RoutingError):
     """The upstream routing provider failed or returned an unusable response."""
 
     def __init__(self, message="Routing provider request failed.", details=None):
-        merged = {"provider": "openrouteservice"}
+        merged = {"provider": "osrm"}
         if details:
             merged.update(details)
         super().__init__(

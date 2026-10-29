@@ -45,8 +45,8 @@ export default function RouteInput() {
       sessionStorage.setItem("routeMeta", JSON.stringify({ loadWeight, interval }));
       navigate("/results");
     } catch (e: any) {
-      const d = e?.response?.data;
-      setError(d?.message || d?.error || "Route generation failed.");
+      const err = e?.response?.data?.error;
+      setError(err?.message || "Route generation failed.");
     } finally {
       setLoading(false);
     }

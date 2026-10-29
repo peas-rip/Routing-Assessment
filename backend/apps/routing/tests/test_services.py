@@ -8,7 +8,7 @@ from django.contrib.gis.geos import LineString
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from apps.routing.clients.openrouteservice import RouteData
+from apps.routing.clients.osrm import RouteData
 from apps.routing.exceptions import NoRouteFoundError, RoutingProviderError
 from apps.routing.models import Checkpoint
 from apps.routing.services import (
@@ -23,7 +23,7 @@ from .fixtures import (
     MOCK_ORS_RESPONSE_1_ROUTE,
     MOCK_ORS_RESPONSE_3_ROUTES,
     MOCK_ORS_RESPONSE_EMPTY,
-    ORS_DIRECTIONS_URL,
+    OSRM_ROUTE_URL,
     make_route,
     make_route_request,
 )
@@ -211,7 +211,7 @@ class GenerateRoutesTests(TestCase):
 
     @responses.activate
     def test_creates_three_named_routes_with_checkpoints(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         route_request = make_route_request()
 
         routes = generate_routes(route_request)
@@ -236,7 +236,7 @@ class GenerateRoutesTests(TestCase):
 
     @responses.activate
     def test_single_route_payload_yields_one_route(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_1_ROUTE)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_1_ROUTE)
         route_request = make_route_request()
 
         routes = generate_routes(route_request)
@@ -247,7 +247,7 @@ class GenerateRoutesTests(TestCase):
 
     @responses.activate
     def test_empty_response_raises_no_route_found(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_EMPTY)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_EMPTY)
         route_request = make_route_request()
 
         with self.assertRaises(NoRouteFoundError):
@@ -258,7 +258,7 @@ class GenerateRoutesTests(TestCase):
     @responses.activate
     def test_unusable_geometry_raises_provider_error(self):
         payload = {"routes": [{"geometry": "...", "distance": 325800, "duration": 11700}]}
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=payload)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=payload)
         route_request = make_route_request()
 
         with self.assertRaises(RoutingProviderError):
@@ -268,7 +268,7 @@ class GenerateRoutesTests(TestCase):
 
     @responses.activate
     def test_rerun_replaces_previous_output(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         route_request = make_route_request()
 
         generate_routes(route_request)
@@ -280,16 +280,9 @@ class GenerateRoutesTests(TestCase):
             sum(route.checkpoints.count() for route in route_request.routes.all()),
         )
 
-    @override_settings(OPENROUTESERVICE_API_KEY="")
-    def test_missing_api_key_raises_provider_error(self):
-        route_request = make_route_request()
-
-        with self.assertRaises(RoutingProviderError):
-            generate_routes(route_request)
-
     @responses.activate
     def test_progress_advances_through_documented_milestones(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_1_ROUTE)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_1_ROUTE)
         route_request = make_route_request()
         self.assertEqual(route_request.progress, 0)
 

@@ -17,7 +17,7 @@ from apps.routing.views import GenerateView, RouteDetailView
 
 from .fixtures import (
     MOCK_ORS_RESPONSE_3_ROUTES,
-    ORS_DIRECTIONS_URL,
+    OSRM_ROUTE_URL,
     make_route_request,
     valid_generate_payload,
 )
@@ -183,7 +183,7 @@ class RouteStatusViewTests(TestCase):
     @responses.activate
     @responses.activate
     def test_completed_status_contract(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         route_request = make_route_request()
         generate_routes_task(str(route_request.id))
 
@@ -233,7 +233,7 @@ class RouteStatusViewTests(TestCase):
     def test_failed_status_returns_error_envelope(self):
         route_request = make_route_request(
             status="failed",
-            error_message="OpenRouteService API key is not configured.",
+            error_message="Routing provider returned an error.",
         )
 
         response = self.client.get(f"/api/v1/routes/{route_request.id}/")
@@ -242,14 +242,14 @@ class RouteStatusViewTests(TestCase):
         error = response.data["error"]
         self.assertEqual(error["code"], "ROUTE_GENERATION_FAILED")
         self.assertTrue(error["message"].startswith("Failed to generate routes: "))
-        self.assertIn("API key", error["message"])
-        self.assertEqual(error["details"]["provider"], "openrouteservice")
+        self.assertIn("Routing provider", error["message"])
+        self.assertEqual(error["details"]["provider"], "osrm")
         self.assertEqual(error["details"]["retry_after"], 60)
 
     @responses.activate
     @responses.activate
     def test_route_detail_contract(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         route_request = make_route_request()
         generate_routes_task(str(route_request.id))
         route = route_request.routes.first()
@@ -303,7 +303,7 @@ class GenerateViewPayloadHandlingTests(TestCase):
         """Contract renders distance/mile markers as JSON numbers, not strings."""
         self.assertFalse(settings.REST_FRAMEWORK["COERCE_DECIMAL_TO_STRING"])
 
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         route_request = make_route_request()
         generate_routes_task(str(route_request.id))
 

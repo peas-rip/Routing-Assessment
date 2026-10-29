@@ -17,7 +17,7 @@ from apps.routing.tasks import generate_routes_task
 from .fixtures import (
     MOCK_ORS_RESPONSE_3_ROUTES,
     MOCK_ORS_RESPONSE_EMPTY,
-    ORS_DIRECTIONS_URL,
+    OSRM_ROUTE_URL,
     make_route_request,
 )
 
@@ -26,7 +26,7 @@ from .fixtures import (
 class GenerateRoutesTaskTests(TestCase):
     @responses.activate
     def test_success_completes_request(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         route_request = make_route_request()
 
         result = generate_routes_task(str(route_request.id))
@@ -43,7 +43,7 @@ class GenerateRoutesTaskTests(TestCase):
 
     @responses.activate
     def test_provider_error_retries_and_keeps_processing(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json={"error": "down"}, status=500)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json={"error": "down"}, status=500)
         route_request = make_route_request()
 
         with self.assertRaises(RoutingProviderError):
@@ -59,7 +59,7 @@ class GenerateRoutesTaskTests(TestCase):
 
     @responses.activate
     def test_provider_error_marks_failed_when_retries_exhausted(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json={"error": "down"}, status=500)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json={"error": "down"}, status=500)
         route_request = make_route_request()
 
         with self.assertRaises(RoutingProviderError):
@@ -71,7 +71,7 @@ class GenerateRoutesTaskTests(TestCase):
 
     @responses.activate
     def test_no_route_found_fails_immediately_without_retry(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_EMPTY)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_EMPTY)
         route_request = make_route_request()
 
         with self.assertRaises(NoRouteFoundError):
@@ -84,8 +84,8 @@ class GenerateRoutesTaskTests(TestCase):
     @responses.activate
     def test_rate_limit_fails_without_retry(self):
         responses.add(
-            responses.POST,
-            ORS_DIRECTIONS_URL,
+            responses.GET,
+            OSRM_ROUTE_URL,
             json={"error": "rate limited"},
             status=429,
             headers={"Retry-After": "60"},
@@ -113,7 +113,7 @@ class GenerateRoutesTaskTests(TestCase):
 
     @responses.activate
     def test_rerun_does_not_duplicate_routes_or_checkpoints(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         route_request = make_route_request()
 
         generate_routes_task(str(route_request.id))
@@ -130,7 +130,7 @@ class GenerateRoutesTaskTests(TestCase):
 
     @responses.activate
     def test_missing_request_id_propagates(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         missing_id = "00000000-0000-0000-0000-000000000000"
 
         with self.assertRaises(RouteRequest.DoesNotExist):
@@ -138,7 +138,7 @@ class GenerateRoutesTaskTests(TestCase):
 
     @responses.activate
     def test_weather_fetch_enqueued_with_all_checkpoints(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         route_request = make_route_request()
 
         with patch("apps.weather.tasks.fetch_weather_for_checkpoints.delay") as weather_delay:
@@ -159,7 +159,7 @@ class GenerateRoutesTaskTests(TestCase):
 
     @responses.activate
     def test_weather_enqueue_failure_does_not_fail_route_generation(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         route_request = make_route_request()
 
         with patch(
@@ -175,7 +175,7 @@ class GenerateRoutesTaskTests(TestCase):
 
     @responses.activate
     def test_weather_enqueue_skipped_when_app_disabled(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         route_request = make_route_request()
         without_weather = [app for app in settings.INSTALLED_APPS if app != "apps.weather"]
 

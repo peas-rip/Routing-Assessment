@@ -8,7 +8,7 @@ run without a broker (Celery is eager).
 from unittest.mock import patch
 
 import responses
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -20,7 +20,7 @@ from .fixtures import (
     MOCK_ORS_RESPONSE_1_ROUTE,
     MOCK_ORS_RESPONSE_3_ROUTES,
     MOCK_ORS_RESPONSE_SHORT_ROUTE,
-    ORS_DIRECTIONS_URL,
+    OSRM_ROUTE_URL,
     valid_generate_payload,
 )
 
@@ -28,7 +28,6 @@ GENERATE_URL = "/api/v1/routes/generate/"
 TASK_DELAY = "apps.routing.tasks.generate_routes_task.delay"
 
 
-@override_settings(OPENROUTESERVICE_API_KEY="test-key")
 class FullFlowTests(TestCase):
     """End-to-end journey: POST -> poll -> completed -> route detail."""
 
@@ -48,7 +47,7 @@ class FullFlowTests(TestCase):
 
     @responses.activate
     def test_full_flow_polls_pending_then_completed_three_routes(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         task_id = self.start_request()
 
         # Poll before the worker picks it up.
@@ -88,7 +87,7 @@ class FullFlowTests(TestCase):
 
     @responses.activate
     def test_single_route_flow_completes_with_one_route(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_1_ROUTE)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_1_ROUTE)
         task_id = self.start_request()
 
         generate_routes_task(task_id)
@@ -101,7 +100,7 @@ class FullFlowTests(TestCase):
 
     @responses.activate
     def test_short_route_flow_has_origin_and_destination_checkpoints(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_SHORT_ROUTE)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_SHORT_ROUTE)
         task_id = self.start_request()
 
         generate_routes_task(task_id)
@@ -114,7 +113,7 @@ class FullFlowTests(TestCase):
 
     @responses.activate
     def test_provider_outage_ends_in_failed_envelope(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json={"error": "down"}, status=503)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json={"error": "down"}, status=503)
         task_id = self.start_request()
 
         # Retries exhausted: the request is marked failed (TESTING.md policy).
@@ -126,7 +125,7 @@ class FullFlowTests(TestCase):
         error = failed.data["error"]
         self.assertEqual(error["code"], "ROUTE_GENERATION_FAILED")
         self.assertTrue(error["message"].startswith("Failed to generate routes: "))
-        self.assertEqual(error["details"]["provider"], "openrouteservice")
+        self.assertEqual(error["details"]["provider"], "osrm")
         self.assertEqual(error["details"]["retry_after"], 60)
 
         # No partial output is left behind.

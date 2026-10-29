@@ -15,7 +15,7 @@ from apps.routing.models import Checkpoint, RouteRequest
 from apps.routing.tasks import generate_routes_task
 from apps.routing.tests.fixtures import (
     MOCK_ORS_RESPONSE_3_ROUTES,
-    ORS_DIRECTIONS_URL,
+    OSRM_ROUTE_URL,
     make_route_request,
 )
 from apps.weather.models import WeatherObservation
@@ -38,7 +38,7 @@ class WeatherFullFlowTests(TestCase):
 
     @responses.activate
     def test_route_generation_stores_weather_and_serves_it(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
         route_request = make_route_request()
 
@@ -72,7 +72,7 @@ class WeatherFullFlowTests(TestCase):
 
     @responses.activate
     def test_route_completes_but_weather_endpoint_fails_when_provider_down(self):
-        responses.add(responses.POST, ORS_DIRECTIONS_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
+        responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         responses.add(responses.GET, OPENMETEO_URL, json={"error": "down"}, status=500)
         route_request = make_route_request()
 

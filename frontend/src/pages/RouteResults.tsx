@@ -47,7 +47,7 @@ export default function RouteResults() {
         }
       } catch (e: any) {
         if (stop) return;
-        setError(e?.response?.data?.message || "Failed to load routes.");
+        setError(e?.response?.data?.error?.message || "Failed to load routes.");
         setStatus("");
       }
     };

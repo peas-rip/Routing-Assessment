@@ -15,7 +15,7 @@ from decimal import Decimal
 
 from django.contrib.gis.geos import Point
 
-from .clients.openrouteservice import MAX_ROUTES, RoutingClient
+from .clients.osrm import MAX_ROUTES, RoutingClient
 from .models import (
     DEFAULT_CHECKPOINT_INTERVAL,
     Checkpoint,
