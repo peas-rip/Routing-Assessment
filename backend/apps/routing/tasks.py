@@ -24,6 +24,12 @@ def _enqueue_weather_fetch(route_request: RouteRequest, checkpoint_ids: list) ->
     """Queue the F04 weather fetch; failures never fail route generation."""
     if "apps.weather" not in settings.INSTALLED_APPS:
         return
+    # When Celery runs tasks eagerly (e.g. free-tier demos without a
+    # worker), running the bulk weather fetch inline would block the
+    # request for tens of seconds and overwhelm the worker. Rely on the
+    # on-demand fetch in /weather/checkpoints/ and /risk/calculate/ instead.
+    if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+        return
     try:
         from apps.weather.tasks import fetch_weather_for_checkpoints
 
