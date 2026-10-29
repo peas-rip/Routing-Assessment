@@ -7,6 +7,10 @@ and covers the United States only.
 NWS uses a two-step API: ``/points/{lat},{lon}`` resolves a grid office, then
 the ``forecastHourly`` URL returns hourly periods. The client hides both steps
 behind the same ``fetch``/``fetch_hourly`` interface the other providers use.
+
+Performance: the /points response (office + grid + forecast URL) is cached
+in-process for 1 hour so repeat fetches for the same location skip a round
+trip. Forecast responses are cached by the service layer (Redis, 15 min).
 """
 
 import logging
@@ -25,6 +29,37 @@ DEFAULT_RETRY_AFTER = 60
 MAX_HOURS = 48
 POINTS_PATH = "https://api.weather.gov/points/{lat},{lon}"
 USER_AGENT_HEADER = "User-Agent"
+
+# In-process cache for /points responses (office + forecast URL). NWS /points
+# is stable per location, so a 1-hour TTL avoids a round trip on every fetch.
+_POINTS_CACHE: dict[tuple[float, float], tuple[dict, float]] = {}
+_POINTS_TTL_SECONDS = 3600
+
+
+def _round_coord(value: float) -> float:
+    return round(value, 4)
+
+
+def _cached_points(lat: float, lon: float) -> dict | None:
+    key = (_round_coord(lat), _round_coord(lon))
+    entry = _POINTS_CACHE.get(key)
+    if entry is None:
+        return None
+    payload, expires_at = entry
+    if time.monotonic() > expires_at:
+        del _POINTS_CACHE[key]
+        return None
+    return payload
+
+
+def _store_points(lat: float, lon: float, payload: dict) -> None:
+    key = (_round_coord(lat), _round_coord(lon))
+    _POINTS_CACHE[key] = (payload, time.monotonic() + _POINTS_TTL_SECONDS)
+
+
+def clear_points_cache() -> None:
+    """Clear the in-process /points cache (used by tests)."""
+    _POINTS_CACHE.clear()
 
 
 def _conditions_from_text(short_forecast: str) -> str:
@@ -65,7 +100,10 @@ class WeatherClient:
         return self.fetch(lat, lon)[0]
 
     def fetch(self, lat: float, lon: float) -> tuple[list[HourlyForecast], dict]:
-        points = self._get_json(POINTS_PATH.format(lat=lat, lon=lon))
+        points = _cached_points(lat, lon)
+        if points is None:
+            points = self._get_json(POINTS_PATH.format(lat=lat, lon=lon))
+            _store_points(lat, lon, points)
         properties = (points or {}).get("properties") or {}
         forecast_url = properties.get("forecastHourly")
         if not forecast_url:
@@ -89,7 +127,6 @@ class WeatherClient:
         dt = datetime.fromisoformat(start).astimezone(UTC) if start else datetime.now(tz=UTC)
         temp = period.get("temperature") or 0
         wind_speed = period.get("windSpeed") or {}
-        # NWS windSpeed may be a dict {"value": 10, "unitCode": ...} or a string.
         if isinstance(wind_speed, dict):
             speed_val = wind_speed.get("value") or 0
         else:
@@ -109,8 +146,6 @@ class WeatherClient:
             precip_type = "rain"
         else:
             precip_type = "none"
-        # NWS gives a probability of precipitation, not a rate; approximate an
-        # intensity (0-1 in/hr) from the percentage for risk scoring.
         rate = round(pop_pct / 100.0, 2)
         snowfall = rate if precip_type == "snow" else 0.0
         return HourlyForecast(
