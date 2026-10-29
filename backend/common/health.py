@@ -34,7 +34,7 @@ class HealthCheckView(APIView):
             "database": self.check_database(),
             "redis": self.check_redis(),
             "openrouteservice": self.check_openrouteservice(),
-            "openweathermap": self.check_openweathermap(),
+            "openmeteo": self.check_openmeteo(),
         }
         healthy = all(v in NON_FATAL_STATUSES for v in checks.values())
         response_status = status.HTTP_200_OK if healthy else status.HTTP_503_SERVICE_UNAVAILABLE
@@ -83,11 +83,13 @@ class HealthCheckView(APIView):
             return CHECK_ERROR
         return CHECK_OK
 
-    def check_openweathermap(self):
-        if not settings.OPENWEATHERMAP_API_KEY:
+    def check_openmeteo(self):
+        # Open-Meteo is keyless, so a live probe would add latency to every
+        # health check. It is only exercised when explicitly enabled.
+        if not settings.OPEN_METEO_HEALTHCHECK_ENABLED:
             return CHECK_NOT_CONFIGURED
 
-        from apps.weather.clients.openweathermap import WeatherClient
+        from apps.weather.clients.openmeteo import WeatherClient
         from apps.weather.exceptions import WeatherRateLimitError
 
         try:
@@ -95,6 +97,6 @@ class HealthCheckView(APIView):
         except WeatherRateLimitError:
             return CHECK_RATE_LIMITED
         except Exception:
-            logger.exception("Health check: openweathermap request failed")
+            logger.exception("Health check: openmeteo request failed")
             return CHECK_ERROR
         return CHECK_OK

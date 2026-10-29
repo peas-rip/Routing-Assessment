@@ -21,7 +21,7 @@ from django.utils import timezone
 from apps.risk.rules import RISK_SCORE_MAP
 from apps.risk.services import assess_conditions
 
-from .clients.openweathermap import HourlyForecast, WeatherClient
+from .clients.openmeteo import HourlyForecast, WeatherClient
 from .exceptions import WeatherError
 from .models import HeatmapCache, WeatherObservation
 
@@ -71,6 +71,7 @@ def forecast_fields(forecast: HourlyForecast, raw_response: dict) -> dict:
         "visibility_mi": forecast.visibility_mi,
         "conditions": forecast.conditions,
         "raw_response": raw_response,
+        "source": "open-meteo",
     }
 
 

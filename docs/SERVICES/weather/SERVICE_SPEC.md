@@ -14,7 +14,7 @@
 - Weather caching (Redis + PostgreSQL)
 - Heatmap grid generation along route corridors
 - Weather observation storage (`weather_observations`, `heatmap_cache` tables)
-- External weather API integration (OpenWeatherMap)
+- External weather API integration (Open-Meteo)
 
 ### Must Never Own
 - Route generation
@@ -317,3 +317,33 @@ def check_weather():
 - Token bucket in Redis for OWM calls
 - Respect `Retry-After` headers
 - Queue excess requests with backoff
+
+## Weather Provider: Open-Meteo
+
+The weather integration uses the **Open-Meteo Forecast API**
+(`https://api.open-meteo.com/v1/forecast`) as its data source.
+
+### Integration Notes
+- **No API key required.** The client (`apps/weather/clients/openmeteo.py`)
+  sends latitude/longitude plus the hourly variables the risk engine needs
+  (temperature, humidity, wind speed/direction/gusts, rain, snowfall,
+  weather code), requested in imperial units (°F, mph, inches).
+- Responses are parsed into the shared `HourlyForecast` shape and cached for
+  15 minutes per (lat, lon, hour) bucket, unchanged from prior behavior.
+- WMO weather codes are mapped to readable condition text (see
+  `WMO_DESCRIPTIONS` in the client).
+- Open-Meteo exposes no visibility field, so `visibility_mi` is always `None`.
+
+### Configuration
+- `OPEN_METEO_BASE_URL` — API base URL (default
+  `https://api.open-meteo.com/v1/forecast`).
+- `OPEN_METEO_HEALTHCHECK_ENABLED` — opt-in flag (default `False`) that enables
+  a live Open-Meteo probe in `/health/`; kept off by default so health checks
+  stay fast and deterministic.
+- `WEATHER_TIMEOUT` — request timeout in seconds (default `10.0`).
+
+### Licensing Constraint
+The Open-Meteo **free API is intended for non-commercial use only**. If this
+project is used commercially, an Open-Meteo commercial plan must be arranged or
+the provider swapped for a commercially licensed alternative. See
+https://open-meteo.com/en/terms for details.

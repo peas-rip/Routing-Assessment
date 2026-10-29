@@ -126,10 +126,12 @@ EXTERNAL_API_TIMEOUT = env.float("EXTERNAL_API_TIMEOUT", default=5.0)
 # Routing calls carry full geometries + alternatives; they get a longer budget.
 ROUTING_TIMEOUT = env.float("ROUTING_TIMEOUT", default=30.0)
 
-OPENWEATHERMAP_API_KEY = env("OPENWEATHERMAP_API_KEY", default="")
-OPENWEATHERMAP_BASE_URL = env(
-    "OPENWEATHERMAP_BASE_URL", default="https://api.openweathermap.org/data/3.0/onecall"
+OPEN_METEO_BASE_URL = env(
+    "OPEN_METEO_BASE_URL", default="https://api.open-meteo.com/v1/forecast"
 )
+# Open-Meteo is keyless; keep its live health probe opt-in so /health/ stays
+# fast and deterministic by default.
+OPEN_METEO_HEALTHCHECK_ENABLED = env.bool("OPEN_METEO_HEALTHCHECK_ENABLED", default=False)
 WEATHER_TIMEOUT = env.float("WEATHER_TIMEOUT", default=10.0)
 
 # ---------------------------------------------------------------------------

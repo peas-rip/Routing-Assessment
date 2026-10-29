@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import responses
 from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -16,14 +16,14 @@ from apps.weather.tasks import fetch_weather_for_checkpoints
 from apps.weather.views import CheckpointWeatherView, HeatmapView
 
 from .fixtures import (
-    MOCK_OWM_RESPONSE,
-    OWM_ONECALL_URL,
+    MOCK_METEO_RESPONSE,
+    OPENMETEO_URL,
     checkpoint_ids_param,
     future_arrival,
     make_checkpoints,
     make_heatmap_route,
     make_observation,
-    mock_onecall_response,
+    mock_meteo_response,
 )
 
 WEATHER_URL = "/api/v1/weather/checkpoints/"
@@ -44,7 +44,6 @@ CONTRACT_FIELDS = [
 ]
 
 
-@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class CheckpointWeatherViewTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -55,7 +54,7 @@ class CheckpointWeatherViewTests(TestCase):
 
     @responses.activate
     def test_returns_stored_weather_with_contract_shape(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=MOCK_OWM_RESPONSE)
+        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
         checkpoints = make_checkpoints()
         for checkpoint in checkpoints:
             make_observation(checkpoint)
@@ -69,7 +68,7 @@ class CheckpointWeatherViewTests(TestCase):
         self.assertEqual(list(first), CONTRACT_FIELDS)
         self.assertEqual(first["checkpoint_id"], str(checkpoints[0].id))
         self.assertEqual(first["temperature_f"], 45.2)
-        self.assertEqual(first["conditions"], "light rain")
+        self.assertEqual(first["conditions"], "slight rain")
         self.assertEqual(first["wind_speed_mph"], 12.5)
         self.assertEqual(first["wind_direction_deg"], 230)
         self.assertEqual(first["precipitation_rate_in_hr"], 0.08)
@@ -105,7 +104,7 @@ class CheckpointWeatherViewTests(TestCase):
 
     @responses.activate
     def test_missing_observations_fetched_on_demand(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=MOCK_OWM_RESPONSE)
+        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
         checkpoints = make_checkpoints()
 
         response = self.get_weather(f"checkpoint_ids={checkpoint_ids_param(checkpoints)}")
@@ -117,7 +116,7 @@ class CheckpointWeatherViewTests(TestCase):
 
     @responses.activate
     def test_on_demand_provider_failure_without_stored_data_returns_502(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json={"error": "boom"}, status=500)
+        responses.add(responses.GET, OPENMETEO_URL, json={"error": "boom"}, status=500)
         checkpoints = make_checkpoints()
 
         response = self.get_weather(f"checkpoint_ids={checkpoint_ids_param(checkpoints)}")
@@ -125,13 +124,13 @@ class CheckpointWeatherViewTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
         error = response.json()["error"]
         self.assertEqual(error["code"], "WEATHER_API_ERROR")
-        self.assertEqual(error["details"]["provider"], "openweathermap")
+        self.assertEqual(error["details"]["provider"], "open-meteo")
 
     @responses.activate
     def test_on_demand_rate_limit_without_stored_data_returns_429(self):
         responses.add(
             responses.GET,
-            OWM_ONECALL_URL,
+            OPENMETEO_URL,
             json={"message": "slow down"},
             status=429,
             headers={"Retry-After": "42"},
@@ -147,7 +146,7 @@ class CheckpointWeatherViewTests(TestCase):
 
     @responses.activate
     def test_on_demand_failure_serves_stored_subset(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json={"error": "boom"}, status=500)
+        responses.add(responses.GET, OPENMETEO_URL, json={"error": "boom"}, status=500)
         checkpoints = make_checkpoints()
         make_observation(checkpoints[0])
 
@@ -226,7 +225,7 @@ class CheckpointWeatherViewTests(TestCase):
 
     @responses.activate
     def test_forecast_time_param_refilters_and_fetches_at_that_time(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=MOCK_OWM_RESPONSE)
+        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
         checkpoints = make_checkpoints()
         make_observation(checkpoints[0])  # stored at the ETA (hour 8)
         explicit = future_arrival(9)  # different time: stored row must not match
@@ -255,7 +254,6 @@ class CheckpointWeatherViewTests(TestCase):
 HEATMAP_URL = "/api/v1/weather/heatmap/"
 
 
-@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class HeatmapViewTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -267,7 +265,7 @@ class HeatmapViewTests(TestCase):
 
     @responses.activate
     def test_contract_shape(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=mock_onecall_response())
+        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
 
         response = self.get_heatmap(f"route_id={self.route.id}&hour=6")
 
@@ -287,7 +285,7 @@ class HeatmapViewTests(TestCase):
 
     @responses.activate
     def test_custom_resolution_is_honored(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=mock_onecall_response())
+        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
 
         response = self.get_heatmap(f"route_id={self.route.id}&hour=6&resolution_miles=20")
 

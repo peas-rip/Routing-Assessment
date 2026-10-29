@@ -11,30 +11,29 @@ from urllib.parse import parse_qs, urlparse
 import responses
 from celery.exceptions import Retry
 from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from apps.weather.exceptions import WeatherProviderError, WeatherRateLimitError
 from apps.weather.models import HeatmapCache, WeatherObservation
 from apps.weather.tasks import fetch_weather_for_checkpoints, generate_heatmap_task
 
 from .fixtures import (
-    MOCK_OWM_RESPONSE,
-    OWM_ONECALL_URL,
+    MOCK_METEO_RESPONSE,
+    OPENMETEO_URL,
     make_checkpoint,
     make_checkpoints,
     make_heatmap_route,
-    mock_onecall_response,
+    mock_meteo_response,
 )
 
 
-@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class FetchWeatherForCheckpointsTests(TestCase):
     def setUp(self):
         cache.clear()
 
     @responses.activate
     def test_creates_observations_for_all_checkpoints(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=MOCK_OWM_RESPONSE)
+        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
         checkpoints = make_checkpoints()
         checkpoint_ids = [str(cp.id) for cp in checkpoints]
 
@@ -66,7 +65,7 @@ class FetchWeatherForCheckpointsTests(TestCase):
 
     @responses.activate
     def test_provider_error_propagates_when_called_directly(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json={"error": "boom"}, status=500)
+        responses.add(responses.GET, OPENMETEO_URL, json={"error": "boom"}, status=500)
         checkpoint = make_checkpoint()
         checkpoint_ids = [str(checkpoint.id)]
 
@@ -80,7 +79,7 @@ class FetchWeatherForCheckpointsTests(TestCase):
 
     @responses.activate
     def test_provider_error_retries_until_exhausted(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json={"error": "boom"}, status=500)
+        responses.add(responses.GET, OPENMETEO_URL, json={"error": "boom"}, status=500)
         checkpoint = make_checkpoint()
         checkpoint_ids = [str(checkpoint.id)]
 
@@ -94,7 +93,7 @@ class FetchWeatherForCheckpointsTests(TestCase):
 
     @responses.activate
     def test_rate_limit_retries_until_exhausted(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json={}, status=429)
+        responses.add(responses.GET, OPENMETEO_URL, json={}, status=429)
         checkpoint = make_checkpoint()
         checkpoint_ids = [str(checkpoint.id)]
 
@@ -105,7 +104,7 @@ class FetchWeatherForCheckpointsTests(TestCase):
 
     @responses.activate
     def test_provider_error_schedules_retry_when_attempts_remain(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json={"error": "boom"}, status=500)
+        responses.add(responses.GET, OPENMETEO_URL, json={"error": "boom"}, status=500)
         checkpoint = make_checkpoint()
         checkpoint_ids = [str(checkpoint.id)]
 
@@ -121,13 +120,13 @@ class FetchWeatherForCheckpointsTests(TestCase):
     def test_partial_failure_completes_with_successful_buckets(self):
         def conditional(request):
             query = parse_qs(urlparse(request.url).query)
-            if query["lat"][0].startswith("40."):
+            if query["latitude"][0].startswith("40."):
                 return (500, {}, '{"error": "boom"}')
-            return (200, {}, json.dumps(MOCK_OWM_RESPONSE))
+            return (200, {}, json.dumps(MOCK_METEO_RESPONSE))
 
         responses.add_callback(
             responses.GET,
-            OWM_ONECALL_URL,
+            OPENMETEO_URL,
             callback=conditional,
             content_type="application/json",
         )
@@ -145,7 +144,7 @@ class FetchWeatherForCheckpointsTests(TestCase):
 
     @responses.activate
     def test_risk_enqueue_failure_does_not_fail_weather_fetch(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=mock_onecall_response())
+        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
         checkpoint = make_checkpoint()
 
         with patch(
@@ -158,14 +157,13 @@ class FetchWeatherForCheckpointsTests(TestCase):
         self.assertEqual(WeatherObservation.objects.count(), 1)
 
 
-@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class GenerateHeatmapTaskTests(TestCase):
     def setUp(self):
         cache.clear()
 
     @responses.activate
     def test_generates_and_caches_grid(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=mock_onecall_response())
+        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
         route = make_heatmap_route()
 
         result = generate_heatmap_task(str(route.id), 6)

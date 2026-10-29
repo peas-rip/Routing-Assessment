@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 import responses
 from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
 
 from apps.weather.exceptions import WeatherProviderError, WeatherRateLimitError
@@ -27,14 +27,14 @@ from apps.weather.services import (
 )
 
 from .fixtures import (
-    MOCK_OWM_RESPONSE,
-    OWM_ONECALL_URL,
+    MOCK_METEO_RESPONSE,
+    OPENMETEO_URL,
     future_arrival,
     make_checkpoint,
     make_checkpoints,
     make_heatmap_route,
     make_observation,
-    mock_onecall_response,
+    mock_meteo_response,
 )
 
 
@@ -47,7 +47,6 @@ class CacheKeyTests(TestCase):
         self.assertEqual(cache_key(39.78171, -89.65014, 8), cache_key(39.78174, -89.65011, 8))
 
 
-@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class FetchWeatherBatchTests(TestCase):
     def setUp(self):
         # LocMem cache persists across tests: reset weather keys + throttle history.
@@ -55,7 +54,7 @@ class FetchWeatherBatchTests(TestCase):
 
     @responses.activate
     def test_deduplicates_by_rounded_coords_and_hour(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=MOCK_OWM_RESPONSE)
+        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
         checkpoints = make_checkpoints()
 
         results = fetch_weather_batch(checkpoints)
@@ -65,7 +64,7 @@ class FetchWeatherBatchTests(TestCase):
 
     @responses.activate
     def test_cache_hit_avoids_second_provider_call(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=MOCK_OWM_RESPONSE)
+        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
         checkpoints = make_checkpoints()
         fetch_weather_batch(checkpoints)
         self.assertEqual(len(responses.calls), 2)
@@ -79,13 +78,13 @@ class FetchWeatherBatchTests(TestCase):
     def test_partial_failure_continues_with_successful_buckets(self):
         def conditional(request):
             query = parse_qs(urlparse(request.url).query)
-            if query["lat"][0].startswith("40."):
+            if query["latitude"][0].startswith("40."):
                 return (500, {}, '{"error": "boom"}')
-            return (200, {}, json.dumps(MOCK_OWM_RESPONSE))
+            return (200, {}, json.dumps(MOCK_METEO_RESPONSE))
 
         responses.add_callback(
             responses.GET,
-            OWM_ONECALL_URL,
+            OPENMETEO_URL,
             callback=conditional,
             content_type="application/json",
         )
@@ -101,7 +100,7 @@ class FetchWeatherBatchTests(TestCase):
     def test_all_buckets_failed_raises_provider_error(self):
         responses.add_callback(
             responses.GET,
-            OWM_ONECALL_URL,
+            OPENMETEO_URL,
             callback=lambda request: (500, {}, '{"error": "boom"}'),
             content_type="application/json",
         )
@@ -114,7 +113,7 @@ class FetchWeatherBatchTests(TestCase):
     def test_rate_limited_batch_raises_rate_limit_error(self):
         responses.add_callback(
             responses.GET,
-            OWM_ONECALL_URL,
+            OPENMETEO_URL,
             callback=lambda request: (429, {"Retry-After": "30"}, "{}"),
             content_type="application/json",
         )
@@ -127,7 +126,7 @@ class FetchWeatherBatchTests(TestCase):
 
     @responses.activate
     def test_missing_forecast_hour_is_skipped_without_error(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=MOCK_OWM_RESPONSE)
+        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
         # Fixture only has hours 8 and 9: an hour-14 arrival has no target.
         checkpoint = make_checkpoint(estimated_arrival=future_arrival(14))
 
@@ -137,14 +136,13 @@ class FetchWeatherBatchTests(TestCase):
         self.assertEqual(len(responses.calls), 1)
 
 
-@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class SaveObservationsTests(TestCase):
     def setUp(self):
         cache.clear()
 
     @responses.activate
     def test_save_uses_checkpoint_estimated_arrival_as_forecast_time(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=MOCK_OWM_RESPONSE)
+        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
         checkpoints = make_checkpoints()
 
         results = fetch_weather_batch(checkpoints)
@@ -165,7 +163,7 @@ class SaveObservationsTests(TestCase):
 
     @responses.activate
     def test_save_refreshes_existing_rows_instead_of_duplicating(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=MOCK_OWM_RESPONSE)
+        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
         checkpoints = make_checkpoints()
         results = fetch_weather_batch(checkpoints)
         save_observations(results)
@@ -292,7 +290,6 @@ class CappedGridTests(TestCase):
         self.assertEqual(len(points), 3000)  # step = ceil(6000 / 5000) = 2
 
 
-@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class GenerateHeatmapTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -300,7 +297,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_contract_shape_and_risk_rules(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=mock_onecall_response())
+        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
 
         result = generate_heatmap(self.route, forecast_hour=6, resolution_miles=10.0)
 
@@ -321,7 +318,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_grid_is_cached_within_ttl(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=mock_onecall_response())
+        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
         first = generate_heatmap(self.route, forecast_hour=6, resolution_miles=10.0)
         calls_after_first = len(responses.calls)
 
@@ -333,7 +330,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_expired_grid_is_regenerated_in_place(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=mock_onecall_response())
+        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
         first = generate_heatmap(self.route, forecast_hour=6, resolution_miles=10.0)
         HeatmapCache.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
 
@@ -344,7 +341,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_forecast_hours_are_cached_separately(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=mock_onecall_response())
+        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
 
         generate_heatmap(self.route, forecast_hour=6, resolution_miles=10.0)
         generate_heatmap(self.route, forecast_hour=7, resolution_miles=10.0)
@@ -353,7 +350,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_resolution_is_clamped_to_supported_band(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=mock_onecall_response())
+        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
 
         low = generate_heatmap(self.route, forecast_hour=6, resolution_miles=1.0)
         high = generate_heatmap(self.route, forecast_hour=6, resolution_miles=100.0)
@@ -363,7 +360,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_hour_without_forecast_yields_empty_grid(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json=MOCK_OWM_RESPONSE)
+        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
         departure = self.route.request.departure_time
         hour = next(
             candidate
@@ -379,7 +376,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_provider_failure_yields_empty_grid(self):
-        responses.add(responses.GET, OWM_ONECALL_URL, json={"error": "boom"}, status=500)
+        responses.add(responses.GET, OPENMETEO_URL, json={"error": "boom"}, status=500)
 
         result = generate_heatmap(self.route, forecast_hour=6, resolution_miles=50.0)
 

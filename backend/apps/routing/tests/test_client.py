@@ -70,8 +70,9 @@ class RoutingClientTests(TestCase):
             {"target_count": 3, "share_factor": 0.6, "weight_factor": 1.5},
         )
         self.assertTrue(body["geometry"])
-        self.assertEqual(body["geometry_format"], "geojson")
-        self.assertEqual(body["units"], "mi")
+        # Distance is requested in meters (default) so the parser's
+        # meters-per-mile conversion is correct.
+        self.assertNotIn("units", body)
         self.assertEqual(captured["headers"]["Authorization"], "test-key")
 
     @responses.activate

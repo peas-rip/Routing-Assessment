@@ -51,6 +51,38 @@ def _positive_number(route: dict, key: str) -> float | None:
     return None
 
 
+def _decode_polyline(encoded: str) -> dict | None:
+    """Decode an ORS encoded-polyline geometry into a GeoJSON LineString."""
+    if not isinstance(encoded, str) or not encoded:
+        return None
+    index = 0
+    lat = 0
+    lng = 0
+    coordinates: list[list[float]] = []
+    length = len(encoded)
+    while index < length:
+        for value_index in (0, 1):
+            shift = 0
+            result = 0
+            while True:
+                if index >= length:
+                    return None
+                byte = ord(encoded[index]) - 63
+                index += 1
+                result |= (byte & 0x1F) << shift
+                shift += 5
+                if byte < 0x20:
+                    break
+            if value_index == 0:
+                lat += (~(result >> 1) if (result & 1) else (result >> 1))
+            else:
+                lng += (~(result >> 1) if (result & 1) else (result >> 1))
+        coordinates.append([lng / 1e5, lat / 1e5])
+    if len(coordinates) < 2:
+        return None
+    return {"type": "LineString", "coordinates": coordinates}
+
+
 def parse_route(route: dict) -> RouteData | None:
     """Convert one provider route entry, or ``None`` when it is unusable."""
     if not isinstance(route, dict):
@@ -62,10 +94,15 @@ def parse_route(route: dict) -> RouteData | None:
     summary = route.get("summary")
     if not isinstance(summary, dict):
         summary = {"distance": distance, "duration": duration}
+    geometry = route.get("geometry")
+    if isinstance(geometry, str):
+        decoded = _decode_polyline(geometry)
+        if decoded is not None:
+            geometry = decoded
     return RouteData(
         distance_miles=round(distance / METERS_PER_MILE, 2),
         duration_minutes=round(duration / 60),
-        geometry=route.get("geometry"),
+        geometry=geometry,
         summary=summary,
     )
 
@@ -90,21 +127,35 @@ class RoutingClient:
             self.session.headers.update({"Authorization": self.api_key})
 
     def get_routes(self, origin, destination) -> list[RouteData]:
-        """Get up to 3 alternative HGV routes between two GEOS points."""
-        payload = {
-            "coordinates": [[origin.x, origin.y], [destination.x, destination.y]],
+        """Get up to 3 alternative HGV routes between two GEOS points.
+
+        OpenRouteService's alternative-routes algorithm caps at ~100 km; for
+        longer trips it rejects the request with a 400. In that case we fall
+        back to a single route so long trips still work.
+        """
+        coordinates = [[origin.x, origin.y], [destination.x, destination.y]]
+        base = {
+            "coordinates": coordinates,
             "profile": PROFILE,
+            "instructions": True,
+            "geometry": True,
+        }
+        payload = {
+            **base,
             "alternative_routes": {
                 "target_count": MAX_ROUTES,
                 "share_factor": 0.6,
                 "weight_factor": 1.5,
             },
-            "instructions": True,
-            "geometry": True,
-            "geometry_format": "geojson",
-            "units": "mi",
         }
-        data = self._request(payload)
+        try:
+            data = self._request(payload)
+        except RoutingProviderError as exc:
+            if exc.details.get("status_code") != 400:
+                raise
+            logger.info("Routing alternatives unsupported here; falling back to a single route")
+            data = self._request(base)
+
         routes = parse_routes(data)
         if not routes:
             raise NoRouteFoundError()

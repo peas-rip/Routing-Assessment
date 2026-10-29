@@ -1,6 +1,6 @@
-"""Mock OpenWeatherMap payloads and shared builders for weather tests."""
+"""Mock Open-Meteo payloads and shared builders for weather tests."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from django.contrib.gis.geos import LineString, Point
@@ -10,87 +10,81 @@ from apps.routing.models import Checkpoint
 from apps.routing.tests.fixtures import make_route
 from apps.weather.models import WeatherObservation
 
-OWM_ONECALL_URL = "https://api.openweathermap.org/data/3.0/onecall"
+OPENMETEO_URL = "https://api.open-meteo.com/v1/forecast"
 
-# docs/SERVICES/weather/TESTING.md fixture: hour-8 rain entry + hour-9 snow
-# entry (dt values are fixed UTC timestamps; tests match on hour-of-day only).
-MOCK_OWM_RESPONSE = {
-    "lat": 39.78,
-    "lon": -89.65,
-    "timezone": "America/Chicago",
-    "hourly": [
-        {
-            "dt": 1703664000,
-            "temp": 45.2,
-            "humidity": 65,
-            "wind_speed": 12.5,
-            "wind_deg": 230,
-            "wind_gust": 18.0,
-            "weather": [{"id": 500, "main": "Rain", "description": "light rain"}],
-            "pop": 0.3,
-            "rain": {"1h": 0.08},
-        },
-        {
-            "dt": 1703667600,
-            "temp": 32.1,
-            "humidity": 85,
-            "wind_speed": 38.0,
-            "wind_deg": 310,
-            "wind_gust": 45.0,
-            "weather": [{"id": 600, "main": "Snow", "description": "heavy snow"}],
-            "pop": 0.9,
-            "snow": {"1h": 1.5},
-        },
-    ],
+# docs/SERVICES/weather/TESTING.md fixture: hour-8 slight-rain entry + hour-9
+# heavy-snow entry (ISO times are fixed UTC; tests match on hour-of-day only).
+MOCK_METEO_RESPONSE = {
+    "latitude": 39.78,
+    "longitude": -89.65,
+    "timezone": "UTC",
+    "hourly": {
+        "time": ["2023-12-27T08:00", "2023-12-27T09:00"],
+        "temperature_2m": [45.2, 32.1],
+        "relative_humidity_2m": [65, 85],
+        "wind_speed_10m": [12.5, 38.0],
+        "wind_direction_10m": [230, 310],
+        "wind_gusts_10m": [18.0, 45.0],
+        "rain": [0.08, 0],
+        "snowfall": [0, 1.5],
+        "weather_code": [61, 75],  # slight rain, heavy snow
+    },
 }
 
-MOCK_OWM_MIXED = {
-    "hourly": [
-        {
-            "dt": 1703664000,
-            "temp": 34.0,
-            "humidity": 80,
-            "wind_speed": 10.0,
-            "wind_deg": 180,
-            "weather": [{"main": "Rain"}],
-            "rain": {"1h": 0.2},
-            "snow": {"1h": 0.5},
-        }
-    ]
+MOCK_METEO_MIXED = {
+    "latitude": 39.78,
+    "longitude": -89.65,
+    "timezone": "UTC",
+    "hourly": {
+        "time": ["2023-12-27T08:00"],
+        "temperature_2m": [34.0],
+        "relative_humidity_2m": [80],
+        "wind_speed_10m": [10.0],
+        "wind_direction_10m": [180],
+        "wind_gusts_10m": [None],
+        "rain": [0.2],
+        "snowfall": [0.5],
+        "weather_code": [3],  # overcast
+    },
 }
 
-MOCK_OWM_CLEAR = {
-    "hourly": [
-        {
-            "dt": 1703664000,
-            "temp": 70,
-            "humidity": 40,
-            "wind_speed": 5,
-            "wind_deg": 90,
-            "weather": [{"main": "Clear"}],
-        }
-    ]
+MOCK_METEO_CLEAR = {
+    "latitude": 39.78,
+    "longitude": -89.65,
+    "timezone": "UTC",
+    "hourly": {
+        "time": ["2023-12-27T08:00"],
+        "temperature_2m": [70],
+        "relative_humidity_2m": [40],
+        "wind_speed_10m": [5],
+        "wind_direction_10m": [90],
+        "wind_gusts_10m": [None],
+        "rain": [0],
+        "snowfall": [0],
+        "weather_code": [0],  # clear sky
+    },
 }
 
 
-def mock_onecall_response(hours: int = 48) -> dict:
-    """OWM payload covering every hour-of-day (dynamic: no hardcoded dates)."""
+def mock_meteo_response(hours: int = 48) -> dict:
+    """Open-Meteo payload covering every hour-of-day (dynamic: no hardcoded dates)."""
     base_hour = int(timezone.now().timestamp()) // 3600 * 3600
-    hourly = [
-        {
-            "dt": base_hour + offset * 3600,
-            "temp": 45.2,
-            "humidity": 65,
-            "wind_speed": 12.5,
-            "wind_deg": 230,
-            "wind_gust": 18.0,
-            "weather": [{"id": 500, "main": "Rain", "description": "light rain"}],
-            "pop": 0.3,
-            "rain": {"1h": 0.08},
-        }
+    time_series = [
+        datetime.fromtimestamp(base_hour + offset * 3600, tz=UTC).strftime("%Y-%m-%dT%H:%M")
         for offset in range(hours)
     ]
-    return {"lat": 39.78, "lon": -89.65, "timezone": "UTC", "hourly": hourly}
+    hourly = {
+        "time": time_series,
+        "temperature_2m": [45.2] * hours,
+        "relative_humidity_2m": [65] * hours,
+        "wind_speed_10m": [12.5] * hours,
+        "wind_direction_10m": [230] * hours,
+        "wind_gusts_10m": [18.0] * hours,
+        "rain": [0.08] * hours,
+        "snowfall": [0.0] * hours,
+        "weather_code": [61] * hours,
+    }
+    return {"latitude": 39.78, "longitude": -89.65, "timezone": "UTC", "hourly": hourly}
 
 
 def future_arrival(hour: int = 8, minute: int = 25):
@@ -156,9 +150,9 @@ def make_observation(checkpoint: Checkpoint, fetched_at=None, **overrides) -> We
         "temperature_f": Decimal("45.20"),
         "humidity_pct": 65,
         "visibility_mi": None,
-        "conditions": "light rain",
-        "raw_response": MOCK_OWM_RESPONSE,
-        "source": "openweathermap",
+        "conditions": "slight rain",
+        "raw_response": MOCK_METEO_RESPONSE,
+        "source": "open-meteo",
     }
     defaults.update(overrides)
     observation = WeatherObservation.objects.create(checkpoint=checkpoint, **defaults)
