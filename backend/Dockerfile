@@ -12,7 +12,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libgeos-c1v5 gdal-bin \
     && rm -rf /var/lib/apt/lists/*
 
-ARG REQUIREMENTS_FILE=development.txt
+ARG REQUIREMENTS_FILE=production.txt
 COPY requirements/ requirements/
 RUN pip install -r requirements/${REQUIREMENTS_FILE}
 
