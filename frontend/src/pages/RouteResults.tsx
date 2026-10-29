@@ -5,228 +5,29 @@ import RouteMap from "../components/RouteMap";
 import type { HeatPoint, RouteOption } from "../components/RouteMap";
 import { riskColor, riskLabel } from "../risk";
 
-interface Weather {
-  checkpoint_id: string;
-  temperature_f: string;
-  conditions: string;
-  wind_speed_mph: string;
-  precipitation_type: string;
-}
+interface Weather { checkpoint_id: string; temperature_f: string; conditions: string; wind_speed_mph: string; precipitation_type: string; }
 
 export default function RouteResults() {
   const navigate = useNavigate();
-  const [routes, setRoutes] = useState<RouteOption[]>([]);
-  const [recommendedId, setRecommendedId] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [weather, setWeather] = useState<Record<string, Weather>>({});
-  const [riskByCheckpoint, setRiskByCheckpoint] = useState<Record<string, string>>({});
-  const [hour, setHour] = useState(0);
-  const [heat, setHeat] = useState<HeatPoint[]>([]);
-  const [status, setStatus] = useState("Loading…");
-  const [error, setError] = useState("");
+  const [routes, setRoutes] = useState<RouteOption[]>([]); const [recommendedId, setRecommendedId] = useState<string | null>(null); const [selectedId, setSelectedId] = useState<string | null>(null); const [weather, setWeather] = useState<Record<string, Weather>>({}); const [riskByCheckpoint, setRiskByCheckpoint] = useState<Record<string, string>>({}); const [hour, setHour] = useState(0); const [heat, setHeat] = useState<HeatPoint[]>([]); const [status, setStatus] = useState("Loading…"); const [error, setError] = useState("");
 
-  // Poll route generation until completed.
-  useEffect(() => {
-    const taskId = sessionStorage.getItem("routeTaskId");
-    if (!taskId) {
-      navigate("/");
-      return;
-    }
-    let stop = false;
-    const poll = async () => {
-      try {
-        const res = await api.get(`/routes/${taskId}/`);
-        const d = res.data.data;
-        if (stop) return;
-        if (d.routes) {
-          setRoutes(d.routes);
-          setSelectedId((prev) => prev ?? d.routes[0]?.id ?? null);
-          setStatus("");
-        } else {
-          setStatus(d.message || "Generating routes…");
-        }
-      } catch (e: any) {
-        if (stop) return;
-        setError(e?.response?.data?.message || "Failed to load routes.");
-        setStatus("");
-      }
-    };
-    poll();
-    const interval = setInterval(poll, 2500);
-    return () => {
-      stop = true;
-      clearInterval(interval);
-    };
-  }, [navigate]);
-
+  useEffect(() => { const taskId = sessionStorage.getItem("routeTaskId"); if (!taskId) { navigate("/"); return; } let stop = false; const poll = async () => { try { const res = await api.get(`/routes/${taskId}/`); const d = res.data.data; if (stop) return; if (d.routes) { setRoutes(d.routes); setSelectedId((prev) => prev ?? d.routes[0]?.id ?? null); setStatus(""); } else setStatus(d.message || "Generating routes…"); } catch (e: any) { if (stop) return; setError(e?.response?.data?.message || "Failed to load routes."); setStatus(""); } }; poll(); const interval = setInterval(poll, 2500); return () => { stop = true; clearInterval(interval); }; }, [navigate]);
   const selected = routes.find((r) => r.id === selectedId) ?? routes[0];
+  useEffect(() => { if (routes.length === 0) return; api.get(`/risk/recommendation/${routes[0].id}/`).then((res) => { setRecommendedId(res.data.data.recommended_route_id); setSelectedId((prev) => prev ?? res.data.data.recommended_route_id); }).catch(() => {}); }, [routes]);
+  useEffect(() => { if (!selected) return; const meta = JSON.parse(sessionStorage.getItem("routeMeta") || "{}"); api.post("/risk/calculate/", { route_id: selected.id, load_weight_lbs: meta.loadWeight ?? 30000, checkpoint_interval_miles: meta.interval ?? 25 }).then((res) => { const map: Record<string, string> = {}; for (const c of res.data.data.checkpoints ?? []) map[c.checkpoint_id] = c.risk?.combined_risk; setRiskByCheckpoint(map); }).catch(() => {}); }, [selected]);
+  useEffect(() => { if (!selected || selected.checkpoints.length === 0) return; const ids = selected.checkpoints.map((c) => c.id).join(","); api.get("/weather/checkpoints/", { params: { checkpoint_ids: ids } }).then((res) => { const map: Record<string, Weather> = {}; for (const w of res.data.data) map[w.checkpoint_id] = w; setWeather(map); }).catch(() => setWeather({})); }, [selected]);
+  const loadHeat = useCallback(async () => { if (!selected) return; try { const res = await api.get("/weather/heatmap/", { params: { route_id: selected.id, hour } }); setHeat(res.data.data.grid ?? []); } catch { setHeat([]); } }, [selected, hour]);
+  useEffect(() => { loadHeat(); }, [loadHeat]);
+  const back = () => { sessionStorage.removeItem("routeTaskId"); navigate("/"); };
+  if (error) return <main className="app-shell flex min-h-screen items-center justify-center p-6"><div className="glass-panel w-full max-w-md rounded-2xl p-6 text-center"><p className="text-red-200">{error}</p><button className="secondary-action mt-5" onClick={back}>Start a new assessment</button></div></main>;
 
-  // Risk recommendation for the whole request (uses any route id).
-  useEffect(() => {
-    if (routes.length === 0) return;
-    api
-      .get(`/risk/recommendation/${routes[0].id}/`)
-      .then((res) => {
-        setRecommendedId(res.data.data.recommended_route_id);
-        setSelectedId((prev) => prev ?? res.data.data.recommended_route_id);
-      })
-      .catch(() => {});
-  }, [routes]);
-
-  // Per-checkpoint risk via the risk calculate endpoint for the selected route.
-  useEffect(() => {
-    if (!selected) return;
-    const meta = JSON.parse(sessionStorage.getItem("routeMeta") || "{}");
-    api
-      .post("/risk/calculate/", {
-        route_id: selected.id,
-        load_weight_lbs: meta.loadWeight ?? 30000,
-        checkpoint_interval_miles: meta.interval ?? 25,
-      })
-      .then((res) => {
-        const map: Record<string, string> = {};
-        for (const c of res.data.data.checkpoints ?? []) {
-          map[c.checkpoint_id] = c.risk?.combined_risk;
-        }
-        setRiskByCheckpoint(map);
-      })
-      .catch(() => {});
-  }, [selected]);
-
-  // Weather for selected route checkpoints.
-  useEffect(() => {
-    if (!selected || selected.checkpoints.length === 0) return;
-    const ids = selected.checkpoints.map((c) => c.id).join(",");
-    api
-      .get("/weather/checkpoints/", { params: { checkpoint_ids: ids } })
-      .then((res) => {
-        const map: Record<string, Weather> = {};
-        for (const w of res.data.data) map[w.checkpoint_id] = w;
-        setWeather(map);
-      })
-      .catch(() => setWeather({}));
-  }, [selected]);
-
-  // Weather heatmap grid for selected route at the chosen forecast hour.
-  const loadHeat = useCallback(async () => {
-    if (!selected) return;
-    try {
-      const res = await api.get("/weather/heatmap/", {
-        params: { route_id: selected.id, hour },
-      });
-      setHeat(res.data.data.grid ?? []);
-    } catch {
-      setHeat([]);
-    }
-  }, [selected, hour]);
-
-  useEffect(() => {
-    loadHeat();
-  }, [loadHeat]);
-
-  const back = () => {
-    sessionStorage.removeItem("routeTaskId");
-    navigate("/");
-  };
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
-        <div className="text-red-400">{error}</div>
-        <button className="bg-slate-700 px-4 py-2 rounded" onClick={back}>New Search</button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-screen p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <div className="lg:col-span-2 h-[40vh] lg:h-full rounded overflow-hidden border border-slate-800">
-        <RouteMap
-          routes={routes}
-          recommendedId={recommendedId}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          riskByCheckpoint={riskByCheckpoint}
-          heat={heat}
-        />
-      </div>
-
-      <div className="space-y-4 overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">Route Options</h1>
-          <button className="bg-slate-700 px-3 py-1 rounded text-sm" onClick={back}>New Search</button>
-        </div>
-
-        {status && <div className="text-slate-400 text-sm animate-pulse">{status}</div>}
-
-        {routes.map((r) => {
-          const isRec = r.id === recommendedId;
-          const isSel = r.id === selected?.id;
-          return (
-            <div
-              key={r.id}
-              onClick={() => setSelectedId(r.id)}
-              className={`p-4 rounded cursor-pointer border ${
-                isSel ? "border-blue-500 bg-slate-800" : "border-slate-800 bg-slate-900"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold">{r.name}</span>
-                {isRec && <span className="text-xs bg-green-600 px-2 py-0.5 rounded">Recommended</span>}
-              </div>
-              <div className="text-sm text-slate-300 mt-1">
-                {Number(r.distance_miles).toFixed(1)} mi · {r.duration_minutes} min ·{" "}
-                {r.checkpoints.length} checkpoints
-              </div>
-            </div>
-          );
-        })}
-
-        {selected && (
-          <div className="bg-slate-900 border border-slate-800 rounded p-4 space-y-3">
-            <h2 className="font-semibold">{selected.name} checkpoints</h2>
-            <ul className="space-y-2 text-sm">
-              {selected.checkpoints.map((cp) => {
-                const w = weather[cp.id];
-                const level = riskByCheckpoint[cp.id];
-                return (
-                  <li key={cp.id} className="flex items-center justify-between border-b border-slate-800 pb-1">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-block w-2 h-2 rounded-full" style={{ background: riskColor(level) }} />
-                        #{cp.sequence} · mile {Number(cp.mile_marker).toFixed(1)}
-                      </div>
-                      <div className="text-slate-400 text-xs">
-                        {w ? `${w.temperature_f}°F · ${w.conditions}` : "weather loading…"}
-                      </div>
-                    </div>
-                    <span className="text-xs capitalize" style={{ color: riskColor(level) }}>
-                      {riskLabel(level)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-
-        <div className="bg-slate-900 border border-slate-800 rounded p-4 space-y-2">
-          <h2 className="font-semibold">Weather heatmap</h2>
-          <div className="text-sm text-slate-400">Forecast hour: {hour}</div>
-          <input
-            type="range"
-            min={0}
-            max={48}
-            value={hour}
-            onChange={(e) => setHour(Number(e.target.value))}
-            className="w-full"
-          />
-          <div className="flex justify-between text-xs text-slate-500">
-            <span>Now</span>
-            <span>+48h</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <main className="app-shell min-h-screen p-3 sm:p-4"><div className="mx-auto grid max-w-[1500px] gap-3 lg:h-[calc(100vh-2rem)] lg:grid-cols-[minmax(0,1.65fr)_minmax(340px,0.8fr)]">
+    <section className="relative min-h-[45vh] overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl lg:min-h-0"><RouteMap routes={routes} recommendedId={recommendedId} selectedId={selectedId} onSelect={setSelectedId} riskByCheckpoint={riskByCheckpoint} heat={heat} /><div className="pointer-events-none absolute left-3 top-3 rounded-lg border border-white/10 bg-slate-950/80 px-3 py-2 text-xs text-slate-300 backdrop-blur sm:left-4 sm:top-4"><span className="font-semibold text-white">Live route view</span><span className="mx-2 text-slate-600">·</span>{selected ? `${selected.checkpoints.length} checkpoints` : "Waiting for routes"}</div></section>
+    <section className="flex min-h-0 flex-col gap-3 overflow-y-auto pb-2 lg:pr-1"><header className="flex items-center justify-between gap-3 px-1"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-300">Assessment results</p><h1 className="mt-1 text-2xl font-bold tracking-tight text-white">Route options</h1></div><button className="secondary-action shrink-0" onClick={back}>New search</button></header>
+      {status && <div className="rounded-xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm text-sky-100" aria-live="polite"><span className="mr-2 inline-block size-2 animate-pulse rounded-full bg-sky-300" />{status}</div>}
+      {routes.length > 0 && <div className="flex flex-col gap-2">{routes.map((r) => { const isRec = r.id === recommendedId; const isSel = r.id === selected?.id; return <button key={r.id} type="button" onClick={() => setSelectedId(r.id)} className={`route-card text-left ${isSel ? "selected" : ""}`} aria-pressed={isSel}><div className="flex items-start justify-between gap-3"><span className="font-semibold text-white">{r.name}</span>{isRec && <span className="shrink-0 rounded-full bg-emerald-400/15 px-2 py-1 text-[11px] font-semibold text-emerald-300">Recommended</span>}</div><div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400"><span>{Number(r.distance_miles).toFixed(1)} mi</span><span>{r.duration_minutes} min</span><span>{r.checkpoints.length} checkpoints</span></div></button>; })}</div>}
+      {selected && <section className="glass-panel rounded-xl p-4"><div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Selected route</p><h2 className="mt-1 font-semibold text-white">{selected.name}</h2></div><span className="rounded-full bg-slate-700/70 px-2.5 py-1 text-xs text-slate-300">{selected.checkpoints.length} stops</span></div><ul className="flex flex-col gap-2">{selected.checkpoints.map((cp) => { const w = weather[cp.id]; const level = riskByCheckpoint[cp.id]; return <li key={cp.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-700/60 bg-slate-950/25 px-3 py-2.5"><div className="min-w-0"><div className="flex items-center gap-2 text-sm text-slate-200"><span className="size-2 shrink-0 rounded-full" style={{ background: riskColor(level) }} />Stop {cp.sequence}<span className="text-slate-500">· mile {Number(cp.mile_marker).toFixed(1)}</span></div><div className="mt-1 truncate text-xs text-slate-500">{w ? `${w.temperature_f}°F · ${w.conditions}` : "Weather loading…"}</div></div><span className="shrink-0 text-xs font-medium capitalize" style={{ color: riskColor(level) }}>{riskLabel(level)}</span></li>; })}</ul></section>}
+      <section className="glass-panel rounded-xl p-4"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-white">Forecast heatmap</h2><p className="mt-1 text-xs text-slate-500">Move through the next 48 hours</p></div><span className="rounded-full bg-sky-400/10 px-2.5 py-1 text-xs font-semibold text-sky-200">+{hour}h</span></div><input aria-label="Forecast hour" type="range" min={0} max={48} value={hour} onChange={(e) => setHour(Number(e.target.value))} className="mt-5 w-full accent-sky-400" /><div className="mt-1 flex justify-between text-[11px] text-slate-500"><span>Now</span><span>+48h</span></div></section>
+    </section>
+  </div></main>;
 }
