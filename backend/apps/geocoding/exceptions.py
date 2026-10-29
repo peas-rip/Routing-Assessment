@@ -16,7 +16,7 @@ class GeocodingProviderError(GeocodingError):
     """The upstream geocoding provider failed or returned an unusable response."""
 
     def __init__(self, message="Geocoding provider request failed.", details=None):
-        merged = {"provider": "nominatim"}
+        merged = {"provider": "openrouteservice"}
         if details:
             merged.update(details)
         super().__init__(

@@ -1,64 +1,73 @@
-"""Shared fixtures: mocked Nominatim payloads."""
+"""Shared fixtures: mocked OpenRouteService (Pelias) payloads."""
 
-NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
-NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
-
-MOCK_SEARCH_RESPONSE = [
-    {
-        "place_id": 4726946,
-        "display_name": "123 Main St, Springfield, IL 62701, United States",
-        "lat": "39.7817",
-        "lon": "-89.6501",
-        "type": "house",
-        "class": "building",
-        "importance": 0.9,
-        "address": {
-            "house_number": "123",
-            "road": "Main St",
-            "city": "Springfield",
-            "state": "IL",
-            "postcode": "62701",
-            "country": "United States",
+MOCK_SEARCH_RESPONSE = {
+    "geocoding": {"attribution": "test", "query": {"text": "springfield"}},
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [-89.6501, 39.7817]},
+            "properties": {
+                "id": "4726946",
+                "gid": "openstreetmap/address/4726946",
+                "layer": "address",
+                "source": "openstreetmap",
+                "source_id": "4726946",
+                "name": "123 Main St",
+                "housenumber": "123",
+                "street": "Main St",
+                "locality": "Springfield",
+                "region_a": "IL",
+                "region": "Illinois",
+                "postalcode": "62701",
+                "country": "United States",
+                "label": "123 Main St, Springfield, IL 62701, United States",
+            },
         },
-    },
-    {
-        "place_id": 4726947,
-        "display_name": "456 Oak Ave, Springfield, IL 62701, United States",
-        "lat": "39.7917",
-        "lon": "-89.6401",
-        "type": "house",
-        "class": "building",
-        "importance": 0.85,
-        "address": {
-            "house_number": "456",
-            "road": "Oak Ave",
-            "city": "Springfield",
-            "state": "IL",
-            "postcode": "62701",
-            "country": "United States",
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [-89.6401, 39.7917]},
+            "properties": {
+                "id": "4726947",
+                "gid": "openstreetmap/address/4726947",
+                "layer": "address",
+                "source": "openstreetmap",
+                "source_id": "4726947",
+                "name": "456 Oak Ave",
+                "housenumber": "456",
+                "street": "Oak Ave",
+                "locality": "Springfield",
+                "region_a": "IL",
+                "postalcode": "62701",
+                "country": "United States",
+                "label": "456 Oak Ave, Springfield, IL 62701, United States",
+            },
         },
-    },
-]
+    ],
+}
 
 MOCK_REVERSE_RESPONSE = {
-    "place_id": 4726946,
-    "display_name": "123 Main St, Springfield, IL 62701, United States",
-    "lat": "39.7817",
-    "lon": "-89.6501",
-    "type": "house",
-    "class": "building",
-    "address": {
-        "house_number": "123",
-        "road": "Main St",
-        "city": "Springfield",
-        "state": "IL",
-        "postcode": "62701",
+    "type": "Feature",
+    "geometry": {"type": "Point", "coordinates": [-89.6501, 39.7817]},
+    "properties": {
+        "id": "4726946",
+        "gid": "openstreetmap/address/4726946",
+        "layer": "address",
+        "source": "openstreetmap",
+        "source_id": "4726946",
+        "name": "123 Main St",
+        "housenumber": "123",
+        "street": "Main St",
+        "locality": "Springfield",
+        "region_a": "IL",
+        "postalcode": "62701",
         "country": "United States",
+        "label": "123 Main St, Springfield, IL 62701, United States",
     },
 }
 
 EXPECTED_FIRST_RESULT = {
-    "place_id": "4726946",
+    "place_id": "openstreetmap_4726946",
     "display_name": "123 Main St, Springfield, IL 62701, United States",
     "latitude": 39.7817,
     "longitude": -89.6501,
@@ -70,17 +79,5 @@ EXPECTED_FIRST_RESULT = {
         "postcode": "62701",
         "country": "United States",
     },
-    "type": "house",
+    "type": "address",
 }
-
-
-from apps.routing.tests.fixtures import make_route as _make_route  # noqa: E402
-from apps.routing.tests.fixtures import make_route_request as _make_route_request  # noqa: E402
-
-
-def make_route(route_request=None, **overrides):
-    return _make_route(route_request, **overrides)
-
-
-def make_route_request(**overrides):
-    return _make_route_request(**overrides)

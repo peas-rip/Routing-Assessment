@@ -33,7 +33,7 @@ class HealthCheckView(APIView):
         checks = {
             "database": self.check_database(),
             "redis": self.check_redis(),
-            "nominatim": self.check_nominatim(),
+            "openrouteservice": self.check_openrouteservice(),
             "openmeteo": self.check_openmeteo(),
         }
         healthy = all(v in NON_FATAL_STATUSES for v in checks.values())
@@ -67,13 +67,11 @@ class HealthCheckView(APIView):
             return CHECK_ERROR
         return CHECK_OK
 
-    def check_nominatim(self):
-        # Nominatim is keyless; keep its live probe opt-in so /health/ stays
-        # fast and deterministic by default.
-        if not settings.NOMINATIM_HEALTHCHECK_ENABLED:
+    def check_openrouteservice(self):
+        if not settings.OPENROUTESERVICE_API_KEY:
             return CHECK_NOT_CONFIGURED
 
-        from apps.geocoding.clients.nominatim import GeocodingClient
+        from apps.geocoding.clients.openrouteservice import GeocodingClient
         from apps.geocoding.exceptions import RateLimitError
 
         try:
@@ -81,7 +79,7 @@ class HealthCheckView(APIView):
         except RateLimitError:
             return CHECK_RATE_LIMITED
         except Exception:
-            logger.exception("Health check: nominatim request failed")
+            logger.exception("Health check: openrouteservice request failed")
             return CHECK_ERROR
         return CHECK_OK
 

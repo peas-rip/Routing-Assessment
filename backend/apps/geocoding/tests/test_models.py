@@ -14,7 +14,7 @@ class GeocodeCacheModelTests(TestCase):
             "display_name": "Springfield, IL",
             "address_components": {"city": "Springfield"},
             "raw_response": {"features": []},
-            "source": "nominatim",
+            "source": "openrouteservice",
             "expires_at": timezone.now() + timedelta(days=30),
         }
         defaults.update(overrides)

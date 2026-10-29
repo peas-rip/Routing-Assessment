@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import RouteMap from "../components/RouteMap";
@@ -24,6 +24,7 @@ export default function RouteResults() {
   const [heat, setHeat] = useState<HeatPoint[]>([]);
   const [status, setStatus] = useState("Loading…");
   const [error, setError] = useState("");
+  const heatTimer = useRef<number | undefined>(undefined);
 
   // Poll route generation until completed.
   useEffect(() => {
@@ -61,16 +62,45 @@ export default function RouteResults() {
 
   const selected = routes.find((r) => r.id === selectedId) ?? routes[0];
 
-  // Risk recommendation for the whole request (uses any route id).
+  // Risk recommendation: calculate risk for every route first (the recommendation
+  // endpoint needs assessments for at least two routes), then fetch the ranking.
   useEffect(() => {
     if (routes.length === 0) return;
-    api
-      .get(`/risk/recommendation/${routes[0].id}/`)
-      .then((res) => {
-        setRecommendedId(res.data.data.recommended_route_id);
-        setSelectedId((prev) => prev ?? res.data.data.recommended_route_id);
-      })
-      .catch(() => {});
+    const meta = JSON.parse(sessionStorage.getItem("routeMeta") || "{}");
+    const lw = meta.loadWeight ?? 30000;
+    const iv = meta.interval ?? 25;
+
+    let cancelled = false;
+    const run = async () => {
+      await Promise.all(
+        routes.map((r) =>
+          api
+            .post("/risk/calculate/", {
+              route_id: r.id,
+              load_weight_lbs: lw,
+              checkpoint_interval_miles: iv,
+            })
+            .catch(() => {}),
+        ),
+      );
+      if (cancelled) return;
+      // retry a few times in case scoring is still being enqueued
+      for (let i = 0; i < 5; i++) {
+        try {
+          const res = await api.get(`/risk/recommendation/${routes[0].id}/`);
+          if (cancelled) return;
+          setRecommendedId(res.data.data.recommended_route_id);
+          setSelectedId((prev) => prev ?? res.data.data.recommended_route_id);
+          return;
+        } catch {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
   }, [routes]);
 
   // Per-checkpoint risk via the risk calculate endpoint for the selected route.
@@ -107,22 +137,22 @@ export default function RouteResults() {
       .catch(() => setWeather({}));
   }, [selected]);
 
-  // Weather heatmap grid for selected route at the chosen forecast hour.
-  const loadHeat = useCallback(async () => {
-    if (!selected) return;
-    try {
-      const res = await api.get("/weather/heatmap/", {
-        params: { route_id: selected.id, hour },
-      });
-      setHeat(res.data.data.grid ?? []);
-    } catch {
-      setHeat([]);
-    }
-  }, [selected, hour]);
-
+  // Weather heatmap grid for selected route at the chosen forecast hour (debounced).
   useEffect(() => {
-    loadHeat();
-  }, [loadHeat]);
+    if (!selected) return;
+    window.clearTimeout(heatTimer.current);
+    heatTimer.current = window.setTimeout(async () => {
+      try {
+        const res = await api.get("/weather/heatmap/", {
+          params: { route_id: selected.id, hour },
+        });
+        setHeat(res.data.data.grid ?? []);
+      } catch {
+        setHeat([]);
+      }
+    }, 400);
+    return () => window.clearTimeout(heatTimer.current);
+  }, [selected, hour]);
 
   const back = () => {
     sessionStorage.removeItem("routeTaskId");

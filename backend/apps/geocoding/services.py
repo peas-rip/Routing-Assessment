@@ -17,7 +17,7 @@ from django.core.cache import cache
 from django.db import DatabaseError
 from django.utils import timezone
 
-from .clients.nominatim import (
+from .clients.openrouteservice import (
     GeocodingClient,
     parse_reverse_payload,
     parse_search_payload,
@@ -27,7 +27,7 @@ from .models import GeocodeCache, QueryType
 
 logger = logging.getLogger(__name__)
 
-SOURCE = "nominatim"
+SOURCE = "openrouteservice"
 REDIS_TTL_SECONDS = 3600
 DB_TTL_DAYS = 30
 SEARCH_CACHE_PREFIX = "geocode:search"
