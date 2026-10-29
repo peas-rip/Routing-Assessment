@@ -110,6 +110,10 @@ CACHES = {
 # ---------------------------------------------------------------------------
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL)
+# Run Celery tasks inline (no worker needed) when enabled. Useful for
+# free-tier deployments without a background worker.
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
+CELERY_TASK_EAGER_PROPAGATES = True
 # Upstash free tier supports only DB 0; use a key prefix conceptually via the
 # broker's namespace. TLS verification uses the system CA bundle.
 if CELERY_BROKER_URL.startswith("rediss://"):
