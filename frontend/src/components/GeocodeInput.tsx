@@ -48,6 +48,24 @@ export default function GeocodeInput({
     }, 350);
   };
 
+  const onBlur = async () => {
+    // If the user typed a full address but didn't pick a suggestion,
+    // auto-select the first geocoding result so the form still works.
+    if (value && text.trim() === value.address) return;
+    if (text.trim().length < 2) return;
+    try {
+      const res = await api.get("/geocoding/search/", { params: { q: text.trim(), limit: 1 } });
+      const r = res.data.data?.[0];
+      if (r) {
+        onSelect({ address: r.display_name, latitude: r.latitude, longitude: r.longitude });
+        setText(r.display_name);
+      }
+    } catch {
+      /* leave as-is */
+    }
+    setOpen(false);
+  };
+
   const pick = (r: GeocodeResult) => {
     onSelect({ address: r.display_name, latitude: r.latitude, longitude: r.longitude });
     setText(r.display_name);
@@ -58,9 +76,10 @@ export default function GeocodeInput({
     <div className="relative">
       <label className="block text-sm text-slate-400 mb-1">{label}</label>
       <input
-        className="w-full p-2 rounded bg-slate-800 border border-slate-700"
+        className="w-full p-2 rounded bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
         value={text}
         onChange={(e) => onType(e.target.value)}
+        onBlur={onBlur}
         placeholder={`Search ${label.toLowerCase()}`}
       />
       {open && results.length > 0 && (
