@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import GeocodeInput from "../components/GeocodeInput";
 import type { Place } from "../components/GeocodeInput";
+import InfoModal from "../components/InfoModal";
 
 const DEFAULT_ORIGIN: Place = {
   address: "New York, NY, USA",
@@ -104,6 +105,7 @@ export default function RouteInput() {
         >
           {loading ? "Generating…" : "Generate Routes"}
         </button>
+        <InfoModal />
       </div>
     </div>
   );

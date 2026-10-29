@@ -182,7 +182,21 @@ export default function RouteResults() {
       <div className="space-y-4 overflow-y-auto">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Route Options</h1>
-          <button className="bg-slate-700 px-3 py-1 rounded text-sm" onClick={back}>New Search</button>
+          <div className="flex gap-2">
+            <button
+              className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm"
+              onClick={() => {
+                try { localStorage.removeItem("routing_info_dismissed"); } catch {}
+                window.location.reload();
+              }}
+              title="Show help"
+            >
+              ?
+            </button>
+            <button className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm" onClick={back}>
+              New Search
+            </button>
+          </div>
         </div>
 
         {status && <div className="text-slate-400 text-sm animate-pulse">{status}</div>}
