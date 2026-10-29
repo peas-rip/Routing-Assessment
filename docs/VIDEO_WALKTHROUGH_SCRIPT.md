@@ -11,7 +11,7 @@
 - Origin & destination (geocoded autocomplete)
 - Departure date/time (must be within 48h — forecast limit)
 - Load weight (10,000–80,000 lb)
-- 3 route options via a routing API
+- 2 route options via a routing API
 - Weather sampled at checkpoints using estimated arrival time
 - Risk calculated with the provided wind/rain/snow thresholds and load rules
 - Best route recommended (fewest severe miles → high miles → avg risk → travel time)
