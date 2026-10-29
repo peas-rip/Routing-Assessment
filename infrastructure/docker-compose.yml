@@ -50,7 +50,7 @@ services:
       - DATABASE_URL=postgres://spotter:${DB_PASSWORD:-spotter_dev_password}@postgres:5432/spotter
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY:-}
       - GEOCODING_PROVIDER=${GEOCODING_PROVIDER:-openrouteservice}
       - PHOTON_BASE_URL=${PHOTON_BASE_URL:-https://photon.komoot.io}
@@ -76,7 +76,7 @@ services:
       - DATABASE_URL=postgres://spotter:${DB_PASSWORD:-spotter_dev_password}@postgres:5432/spotter
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY:-}
       - GEOCODING_PROVIDER=${GEOCODING_PROVIDER:-openrouteservice}
       - PHOTON_BASE_URL=${PHOTON_BASE_URL:-https://photon.komoot.io}

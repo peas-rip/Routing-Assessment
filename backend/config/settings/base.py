@@ -109,12 +109,13 @@ CACHES = {
 # Celery
 # ---------------------------------------------------------------------------
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
-CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://127.0.0.1:6379/1")
-# Upstash (and other TLS-only Redis providers) require ssl_cert_reqs.
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL)
+# Upstash free tier supports only DB 0; use a key prefix conceptually via the
+# broker's namespace. TLS verification uses the system CA bundle.
 if CELERY_BROKER_URL.startswith("rediss://"):
-    CELERY_BROKER_USE_SSL = {"ssl_cert_reqs": "none"}
+    CELERY_BROKER_USE_SSL = {"ssl_cert_reqs": "CERT_REQUIRED"}
 if CELERY_RESULT_BACKEND.startswith("rediss://"):
-    CELERY_REDIS_BACKEND_USE_SSL = {"ssl_cert_reqs": "none"}
+    CELERY_REDIS_BACKEND_USE_SSL = {"ssl_cert_reqs": "CERT_REQUIRED"}
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
