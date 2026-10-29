@@ -4,7 +4,7 @@
 - **Project**: Weather-Aware Truck Routing
 - **Stack**: React + Django (confirmed)
 - **Scale**: Small (100-1,000 users)
-- **APIs**: OpenStreetMap/OSRM + OpenWeatherMap (confirmed)
+- **APIs**: OpenStreetMap/OSRM + National Weather Service (NWS) (confirmed)
 
 ---
 
@@ -183,7 +183,7 @@
 - **Self-hosted**: Nominatim on VPS (requires ~50GB+ disk)
 - **Managed**: OpenRouteService, LocationIQ (free tiers available)
 
-### Weather: OpenWeatherMap
+### Weather: National Weather Service (NWS)
 - **Free Tier**: 1,000 calls/day, 60 calls/min
 - **Paid**: $40/month for higher limits
 - **Data**: Current, forecast (48hr), historical

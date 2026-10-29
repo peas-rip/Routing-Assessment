@@ -94,7 +94,7 @@ Display a weather risk heatmap along the trip corridor with a 0-48 hour forecast
 ## Dependencies
 
 ### External
-- OpenWeatherMap (via Weather Service)
+- National Weather Service (NWS) (via Weather Service)
 - Mapbox GL JS heatmap layer (frontend)
 
 ### Internal

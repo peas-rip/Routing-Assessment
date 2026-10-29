@@ -132,7 +132,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY}
-      - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY}
+      - NWS_BASE_URL=${NWS_BASE_URL}
       - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
       - FRONTEND_URL=https://${DOMAIN}
@@ -161,7 +161,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY}
-      - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY}
+      - NWS_BASE_URL=${NWS_BASE_URL}
     depends_on:
       - postgres
       - redis
@@ -406,7 +406,7 @@ find /backups -name "spotter-*.sql.gz" -mtime +7 -delete
 | API | Free Tier | Paid Estimate |
 |-----|-----------|---------------|
 | OpenRouteService | 2,000 req/day | $50-200/mo |
-| OpenWeatherMap | 1,000 calls/day | $40/mo |
+| National Weather Service (NWS) | 1,000 calls/day | $40/mo |
 | Mapbox | 50k map loads/mo | $5/mo per 1k |
 
 **Note**: At 1,000 users, likely within free tiers.
@@ -477,7 +477,7 @@ CELERY_RESULT_BACKEND=redis://redis:6379/2
 
 # External APIs
 OPENROUTESERVICE_API_KEY=ors_xxx
-OPENWEATHERMAP_API_KEY=owm_xxx
+NWS_BASE_URL=owm_xxx
 MAPBOX_TOKEN=pk.xxx
 
 # Email (for alerts)

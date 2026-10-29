@@ -111,7 +111,7 @@ CREATE TABLE weather_observations (
     visibility_mi DECIMAL(5, 2),
     conditions VARCHAR(100),  -- Human readable: "Light rain", "Heavy snow"
     raw_response JSONB NOT NULL,  -- Full API response for debugging
-    source VARCHAR(50) NOT NULL DEFAULT 'openweathermap'
+    source VARCHAR(50) NOT NULL DEFAULT 'nws'
 );
 
 CREATE INDEX idx_weather_checkpoint_time ON weather_observations(checkpoint_id, forecast_time);
@@ -375,7 +375,7 @@ class WeatherObservation(models.Model):
     visibility_mi = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     conditions = models.CharField(max_length=100, blank=True)
     raw_response = models.JSONField()
-    source = models.CharField(max_length=50, default='openweathermap')
+    source = models.CharField(max_length=50, default='nws')
 
     class Meta:
         indexes = [

@@ -5,7 +5,7 @@
 ### Environment Variables
 ```bash
 # Required
-OPENWEATHERMAP_API_KEY=owm_xxx
+NWS_BASE_URL=owm_xxx
 
 # Celery
 CELERY_BROKER_URL=redis://redis:6379/1
@@ -38,7 +38,7 @@ def check_weather():
         client = WeatherClient()
         forecasts = client.fetch_hourly(39.78, -89.65)
         if forecasts and len(forecasts) > 0:
-            return {"status": "healthy", "provider": "openweathermap", "forecast_hours": len(forecasts)}
+            return {"status": "healthy", "provider": "nws", "forecast_hours": len(forecasts)}
         return {"status": "degraded", "reason": "No forecast data"}
     except RateLimitError as e:
         return {"status": "degraded", "reason": f"Rate limited, retry after {e.retry_after}s"}
@@ -118,7 +118,7 @@ docker compose -f docker-compose.prod.yml run --rm django python manage.py migra
 
 # 2. Verify OWM connectivity
 docker compose exec django python manage.py shell -c "
-from apps.weather.clients.openweathermap import WeatherClient
+from apps.weather.clients.nws import WeatherClient
 client = WeatherClient()
 f = client.fetch_hourly(39.78, -89.65)
 print(f'Fetched {len(f)} hourly forecasts')
@@ -149,7 +149,7 @@ docker compose -f docker-compose.prod.yml up -d --no-deps django celery
 ### Debug Commands
 ```bash
 # Check OWM connectivity
-curl "https://api.openweathermap.org/data/3.0/onecall?lat=39.78&lon=-89.65&exclude=minutely,daily,alerts&units=imperial&appid=$OWM_KEY"
+curl "https://api.nws.org/data/3.0/onecall?lat=39.78&lon=-89.65&exclude=minutely,daily,alerts&units=imperial&appid=$OWM_KEY"
 
 # Check Redis weather cache
 redis-cli KEYS "weather:*" | head -20

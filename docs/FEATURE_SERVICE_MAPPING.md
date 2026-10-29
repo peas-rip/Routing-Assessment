@@ -80,7 +80,7 @@ Each feature is owned by exactly one service. Services may implement multiple fe
 **Responsibilities**:
 - Fetch weather forecasts for checkpoints at estimated arrival times
 - Cache weather data (TTL: 15 minutes)
-- Handle API rate limits (OpenWeatherMap: 60/min)
+- Handle API rate limits (National Weather Service (NWS): 60/min)
 - Generate weather heatmap grids along route corridors
 - Pre-compute heatmap for 0-48 hour slider
 - Bulk fetch for multiple checkpoints (parallel)
@@ -99,7 +99,7 @@ Each feature is owned by exactly one service. Services may implement multiple fe
 **Data Owned**: `weather_observations`, `heatmap_cache` tables
 
 **Dependencies**:
-- External: OpenWeatherMap API
+- External: National Weather Service (NWS) API
 - Internal: Routing Service (consumes route.generated event)
 
 ---

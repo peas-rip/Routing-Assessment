@@ -11,7 +11,7 @@ Fetch weather forecasts for each checkpoint at its estimated arrival time, cache
 3. Weather Service worker:
    - Groups checkpoints by forecast time (hourly buckets)
    - For each unique (lat, lon, hour): Check Redis cache
-   - Cache miss → Call OpenWeatherMap One Call API 3.0
+   - Cache miss → Call National Weather Service (NWS) Forecast API
    - Cache hit → Return cached data
    - Save WeatherObservation records
    - Enqueue risk calculation (F05)
@@ -129,7 +129,7 @@ Fetch weather forecasts for each checkpoint at its estimated arrival time, cache
 ## Dependencies
 
 ### External
-- **OpenWeatherMap One Call API 3.0** - Primary
+- **National Weather Service (NWS) Forecast API** - Primary
   - Free tier: 1,000 calls/day, 60/min
   - Provides: Current, minutely, hourly (48h), daily (8d)
   - Parameters: lat, lon, exclude=minutely,daily,alerts
@@ -151,7 +151,7 @@ Fetch weather forecasts for each checkpoint at its estimated arrival time, cache
 5. **Snow vs Rain classification**: Use temperature threshold (≤32°F = snow)
 6. **Mixed precipitation**: API returns both → Set type='mixed', use highest rate
 7. **Coordinate precision**: Round to 4 decimals (~11m) for cache key
-8. **Timezone**: OpenWeatherMap returns UTC, convert to checkpoint TZ
+8. **Timezone**: National Weather Service (NWS) returns UTC, convert to checkpoint TZ
 
 ---
 
@@ -172,7 +172,7 @@ Fetch weather forecasts for each checkpoint at its estimated arrival time, cache
 
 1. ✅ Fetches weather for all checkpoints in parallel (batched by time)
 2. ✅ Cache hit rate >80% for repeated route requests
-3. ✅ Respects OpenWeatherMap rate limits (60/min)
+3. ✅ Respects National Weather Service (NWS) rate limits (60/min)
 4. ✅ Returns data within 5 seconds for 50 checkpoints
 5. ✅ Handles snow/rain classification correctly (temp-based)
 6. ✅ Heatmap generates grid at specified resolution
@@ -194,10 +194,10 @@ Fetch weather forecasts for each checkpoint at its estimated arrival time, cache
 
 ## Implementation Notes
 
-### OpenWeatherMap One Call 3.0 Request
+### National Weather Service (NWS) One Call 3.0 Request
 ```python
 # One Call API 3.0
-url = "https://api.openweathermap.org/data/3.0/onecall"
+url = "https://api.nws.org/data/3.0/onecall"
 params = {
     'lat': checkpoint.latitude,
     'lon': checkpoint.longitude,

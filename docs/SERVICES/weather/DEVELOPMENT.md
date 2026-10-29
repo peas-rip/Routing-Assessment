@@ -34,7 +34,7 @@ apps/weather/
 ├── managers.py            # WeatherObservationManager
 ├── clients/
 │   ├── __init__.py
-│   └── openweathermap.py
+│   └── nws.py
 ├── services.py            # fetch_batch, generate_heatmap, deduplication
 ├── tasks.py               # fetch_weather_task, generate_heatmap_task
 ├── views.py               # CheckpointWeatherView, HeatmapView
@@ -85,7 +85,7 @@ class WeatherObservation(models.Model):
     conditions = models.CharField(max_length=100, blank=True)
     
     raw_response = models.JSONField()
-    source = models.CharField(max_length=50, default='openweathermap')
+    source = models.CharField(max_length=50, default='nws')
     
     class Meta:
         indexes = [
@@ -115,12 +115,12 @@ class HeatmapCache(models.Model):
 
 ### Weather Client
 ```python
-# clients/openweathermap.py
+# clients/nws.py
 class WeatherClient:
-    BASE_URL = "https://api.openweathermap.org/data/3.0/onecall"
+    BASE_URL = "https://api.nws.org/data/3.0/onecall"
     
     def __init__(self, api_key: str = None, timeout: float = 10.0):
-        self.api_key = api_key or settings.OPENWEATHERMAP_API_KEY
+        self.api_key = api_key or settings.NWS_BASE_URL
         self.timeout = timeout
         self.session = requests.Session()
     
@@ -264,7 +264,7 @@ def generate_heatmap_grid(route: Route, hour: int, resolution_miles: float = 10)
 ```bash
 # Test client directly
 python manage.py shell -c "
-from apps.weather.clients.openweathermap import WeatherClient
+from apps.weather.clients.nws import WeatherClient
 client = WeatherClient()
 forecasts = client.fetch_hourly(39.78, -89.65)
 for f in forecasts[:3]:

@@ -47,7 +47,7 @@ Build services in dependency order. Each service must be independently testable 
 
 **Tasks**:
 1. Models: `WeatherObservation`, `HeatmapCache`
-2. OpenWeatherMap client (One Call 3.0)
+2. National Weather Service (NWS) client (One Call 3.0)
 3. Bulk fetch with deduplication
 4. Cache layer (Redis 15min + DB)
 5. Celery task: `fetch_weather_for_checkpoints`
@@ -148,7 +148,7 @@ Week 5:  Polish + Deploy
 
 #### Weather Service
 - [x] `models.py` - WeatherObservation, HeatmapCache
-- [x] `clients/openweathermap.py` - WeatherClient
+- [x] `clients/nws.py` - WeatherClient
 - [x] `services.py` - fetch_batch, deduplication, Redis cache (15min)
 - [x] `services.py` - generate_heatmap
 - [x] `tasks.py` - fetch_weather_for_checkpoints

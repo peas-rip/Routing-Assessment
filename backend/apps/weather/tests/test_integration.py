@@ -53,10 +53,10 @@ class WeatherFullFlowTests(TestCase):
             Checkpoint.objects.filter(route__request=route_request).values_list("id", flat=True)
         )
         self.assertTrue(checkpoint_ids)
-        self.assertEqual(
-            WeatherObservation.objects.filter(checkpoint_id__in=checkpoint_ids).count(),
-            len(checkpoint_ids),
-        )
+
+        # Weather is fetched on demand by the weather endpoint (not during
+        # route generation) so route generation stays fast.
+        self.assertEqual(WeatherObservation.objects.count(), 0)
 
         response = self.client.get(
             WEATHER_URL, {"checkpoint_ids": checkpoint_ids_param(checkpoint_ids)}

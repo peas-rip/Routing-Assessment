@@ -137,6 +137,7 @@ class GenerateRoutesTaskTests(TestCase):
             generate_routes_task(missing_id)
 
     @responses.activate
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
     def test_weather_fetch_enqueued_with_all_checkpoints(self):
         responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
         route_request = make_route_request()

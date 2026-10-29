@@ -65,6 +65,16 @@ Weather-Aware Truck Routing follows a **Service-Oriented Architecture** with a D
 
 ---
 
+## External Providers
+
+| Service | Provider | Auth | Notes |
+|---------|----------|------|-------|
+| Routing | OSRM (public demo / self-hosted) | None | Keyless; alternative routes may be limited on the public demo |
+| Geocoding | OpenRouteService (default) or Photon | ORS key (optional) | Toggle via GEOCODING_PROVIDER |
+| Weather | National Weather Service / NOAA | None | US-only, keyless, no credit card |
+
+All providers are swappable behind thin client interfaces (RoutingClient, GeocodingClient, WeatherClient). No credentials are required for the default routing/weather stack.
+
 ## Service Decomposition
 
 ### 1. API Gateway (Nginx)
@@ -80,13 +90,13 @@ Weather-Aware Truck Routing follows a **Service-Oriented Architecture** with a D
 ### 3. Routing Service (Django App: `routing`)
 - **Responsibility**: Route generation, checkpoint sampling, route persistence
 - **API**: `POST /api/routes/generate/`, `GET /api/routes/{id}/`
-- **Dependencies**: OpenRouteService, PostgreSQL/PostGIS, Redis (cache)
+- **Dependencies**: OSRM, PostgreSQL/PostGIS, Redis (cache)
 - **Async**: Celery task for route generation
 
 ### 4. Weather Service (Django App: `weather`)
 - **Responsibility**: Weather fetching, caching, forecast retrieval
 - **API**: `GET /api/weather/checkpoints/`, `GET /api/weather/heatmap/`
-- **Dependencies**: OpenWeatherMap, Redis (cache), PostgreSQL
+- **Dependencies**: NWS/NOAA (US-only, keyless), Redis (cache), PostgreSQL
 - **Async**: Celery task for bulk weather fetching
 
 ### 5. Risk Service (Django App: `risk`)
@@ -98,7 +108,7 @@ Weather-Aware Truck Routing follows a **Service-Oriented Architecture** with a D
 ### 6. Geocoding Service (Django App: `geocoding`)
 - **Responsibility**: Address autocomplete, forward/reverse geocoding
 - **API**: `GET /api/geocoding/search/`, `GET /api/geocoding/reverse/`
-- **Dependencies**: OpenRouteService/Nominatim, Redis (cache)
+- **Dependencies**: OpenRouteService/Nominatim/Photon, Redis (cache)
 - **Async**: None (fast responses needed)
 
 ---

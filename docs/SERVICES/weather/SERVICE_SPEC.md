@@ -14,7 +14,7 @@
 - Weather caching (Redis + PostgreSQL)
 - Heatmap grid generation along route corridors
 - Weather observation storage (`weather_observations`, `heatmap_cache` tables)
-- External weather API integration (Open-Meteo)
+- External weather API integration (NWS / NOAA)
 
 ### Must Never Own
 - Route generation
@@ -39,7 +39,7 @@
 - **Risk Service** - Produces weather for (async trigger)
 
 ### External
-- **OpenWeatherMap One Call API 3.0** - Primary weather
+- **National Weather Service (NWS) Forecast API** - Primary weather
   - Endpoint: `/data/3.0/onecall`
   - Params: `lat, lon, exclude=minutely,daily,alerts, units=imperial`
   - Rate limit: 1,000 calls/day, 60/min (free tier)
@@ -119,7 +119,7 @@ python manage.py runserver 0.0.0.0:8000
 apps/weather/
 ├── models.py          # WeatherObservation, HeatmapCache
 ├── clients/
-│   └── openweathermap.py  # WeatherClient
+│   └── nws.py  # WeatherClient
 ├── services.py        # fetch_batch, generate_heatmap, deduplication
 ├── tasks.py           # fetch_weather_task, generate_heatmap_task
 ├── views.py           # CheckpointWeatherView, HeatmapView
@@ -136,11 +136,11 @@ apps/weather/
 
 #### Weather Client
 ```python
-# apps/weather/clients/openweathermap.py
+# apps/weather/clients/nws.py
 class WeatherClient:
     def __init__(self):
-        self.base_url = "https://api.openweathermap.org/data/3.0/onecall"
-        self.api_key = settings.OPENWEATHERMAP_API_KEY
+        self.base_url = "https://api.nws.org/data/3.0/onecall"
+        self.api_key = settings.NWS_BASE_URL
         self.timeout = 10.0
     
     def fetch_hourly(self, lat: float, lon: float) -> List[HourlyForecast]:
@@ -293,7 +293,7 @@ MOCK_OWM_RESPONSE = {
 
 ### Configuration
 ```bash
-OPENWEATHERMAP_API_KEY=owm_xxx
+NWS_BASE_URL=owm_xxx
 CELERY_BROKER_URL=redis://redis:6379/1
 ```
 
@@ -318,32 +318,33 @@ def check_weather():
 - Respect `Retry-After` headers
 - Queue excess requests with backoff
 
-## Weather Provider: Open-Meteo
+## Weather Provider: National Weather Service (NWS / NOAA)
 
-The weather integration uses the **Open-Meteo Forecast API**
-(`https://api.open-meteo.com/v1/forecast`) as its data source.
+The weather integration uses the **NWS Forecast API**
+(`https://api.weather.gov`) as its data source. Coverage is **US-only**.
 
 ### Integration Notes
-- **No API key required.** The client (`apps/weather/clients/openmeteo.py`)
-  sends latitude/longitude plus the hourly variables the risk engine needs
-  (temperature, humidity, wind speed/direction/gusts, rain, snowfall,
-  weather code), requested in imperial units (°F, mph, inches).
+- **No API key required.** The client (`apps/weather/clients/nws.py`)
+  resolves a grid office via `/points/{lat},{lon}` and fetches the hourly
+  forecast from the returned `forecastHourly` URL.
 - Responses are parsed into the shared `HourlyForecast` shape and cached for
   15 minutes per (lat, lon, hour) bucket, unchanged from prior behavior.
-- WMO weather codes are mapped to readable condition text (see
-  `WMO_DESCRIPTIONS` in the client).
-- Open-Meteo exposes no visibility field, so `visibility_mi` is always `None`.
+- NWS provides temperature, wind speed/direction, and probability of
+  precipitation; humidity and visibility are not available, so they are
+  stored as `None`/`0`.
+- Precipitation rate is approximated from the probability of precipitation
+  (0-1 in/hr) since NWS does not provide an hourly rate directly.
 
 ### Configuration
-- `OPEN_METEO_BASE_URL` — API base URL (default
-  `https://api.open-meteo.com/v1/forecast`).
-- `OPEN_METEO_HEALTHCHECK_ENABLED` — opt-in flag (default `False`) that enables
-  a live Open-Meteo probe in `/health/`; kept off by default so health checks
-  stay fast and deterministic.
-- `WEATHER_TIMEOUT` — request timeout in seconds (default `10.0`).
+- `NWS_BASE_URL` - API base URL (default `https://api.weather.gov`).
+- `NWS_USER_AGENT` - required descriptive User-Agent (default
+  `Routing-Assessment/1.0`).
+- `NWS_HEALTHCHECK_ENABLED` - opt-in flag (default `False`) that enables a
+  live NWS probe in `/health/`; kept off by default so health checks stay
+  fast and deterministic.
+- `WEATHER_TIMEOUT` - request timeout in seconds (default `30.0`).
 
-### Licensing Constraint
-The Open-Meteo **free API is intended for non-commercial use only**. If this
-project is used commercially, an Open-Meteo commercial plan must be arranged or
-the provider swapped for a commercially licensed alternative. See
-https://open-meteo.com/en/terms for details.
+### Licensing
+The NWS API is a **free US-government service** with no API key, no credit
+card, and no commercial-use restriction. Polite usage is expected
+(~1 req/sec).

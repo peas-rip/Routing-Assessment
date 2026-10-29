@@ -17,7 +17,7 @@ route based on weather, load weight, and travel time.
 
 ```bash
 cd infrastructure
-cp ../.env.example .env          # add your OpenRouteService + OpenWeatherMap keys
+cp ../.env.example .env          # add your OpenRouteService + National Weather Service (NWS) keys
 docker compose up -d
 docker compose exec -e DJANGO_SETTINGS_MODULE=config.settings.testing django pytest
 ```

@@ -73,7 +73,7 @@ Service-driven incremental delivery. Each phase delivers working, testable, depl
 
 ### Deliverables
 - [ ] Weather Service (F04)
-  - OpenWeatherMap integration
+  - National Weather Service (NWS) integration
   - Bulk fetching with deduplication
   - Cache layer (15 min TTL)
   - Heatmap grid generation
@@ -89,7 +89,7 @@ Service-driven incremental delivery. Each phase delivers working, testable, depl
 
 ### Dependencies
 - Phase 2 complete
-- OpenWeatherMap API key
+- National Weather Service (NWS) API key
 
 ### Risks
 - Weather API rate limits (60/min)

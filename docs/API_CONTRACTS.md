@@ -430,7 +430,7 @@ Returns single route with full checkpoints.
     "database": "ok",
     "redis": "ok",
     "openrouteservice": "ok",
-    "openweathermap": "ok"
+    "nws": "ok"
   },
   "version": "1.0.0",
   "timestamp": "2026-10-27T12:00:00Z"

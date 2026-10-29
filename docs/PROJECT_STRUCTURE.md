@@ -92,7 +92,7 @@ routing-assessment/
 │   │   │   ├── tasks.py
 │   │   │   ├── clients/
 │   │   │   │   ├── __init__.py
-│   │   │   │   └── openweathermap.py
+│   │   │   │   └── nws.py
 │   │   │   ├── managers.py
 │   │   │   ├── migrations/
 │   │   │   └── tests/
@@ -377,7 +377,7 @@ REDIS_URL=redis://host:6379/0
 
 # External APIs
 OPENROUTESERVICE_API_KEY=...
-OPENWEATHERMAP_API_KEY=...
+NWS_BASE_URL=...
 
 # Celery
 CELERY_BROKER_URL=redis://host:6379/0

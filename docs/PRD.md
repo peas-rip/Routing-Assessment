@@ -133,7 +133,7 @@ Enable truck drivers to select the safest route based on real-time weather condi
 
 ### External API Limits
 - **OpenRouteService**: 2,000 requests/day free tier
-- **OpenWeatherMap**: 1,000 calls/day, 60/min free tier
+- **National Weather Service (NWS)**: 1,000 calls/day, 60/min free tier
 - **Nominatim**: 1 req/s (self-hosted unlimited)
 
 ### Data Freshness
@@ -165,7 +165,7 @@ Enable truck drivers to select the safest route based on real-time weather condi
 
 ### External Services
 1. **OpenRouteService** - Routing + Geocoding (primary)
-2. **OpenWeatherMap** - Weather forecasts
+2. **National Weather Service (NWS)** - Weather forecasts
 3. **Mapbox** or **Leaflet** - Map tiles (if not self-hosted)
 
 ### Internal Services
