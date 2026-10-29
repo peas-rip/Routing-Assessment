@@ -20,7 +20,7 @@ from apps.routing.tests.fixtures import (
 )
 from apps.weather.models import WeatherObservation
 
-from .fixtures import OPENMETEO_URL, checkpoint_ids_param, mock_meteo_response
+from .fixtures import checkpoint_ids_param, register_nws, register_nws_error
 
 GENERATE_URL = "/api/v1/routes/generate/"
 WEATHER_URL = "/api/v1/weather/checkpoints/"
@@ -30,6 +30,7 @@ WEATHER_URL = "/api/v1/weather/checkpoints/"
 # class replaces it with a plain function and pytest would never collect it.
 @override_settings(
     OPENROUTESERVICE_API_KEY="test-key",  # route generation runs inline (eager)
+    OPENWEATHERMAP_API_KEY="test-key",
 )
 class WeatherFullFlowTests(TestCase):
     def setUp(self):
@@ -39,7 +40,7 @@ class WeatherFullFlowTests(TestCase):
     @responses.activate
     def test_route_generation_stores_weather_and_serves_it(self):
         responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
-        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
+        register_nws()
         route_request = make_route_request()
 
         result = generate_routes_task(str(route_request.id))
@@ -73,7 +74,7 @@ class WeatherFullFlowTests(TestCase):
     @responses.activate
     def test_route_completes_but_weather_endpoint_fails_when_provider_down(self):
         responses.add(responses.GET, OSRM_ROUTE_URL, json=MOCK_ORS_RESPONSE_3_ROUTES)
-        responses.add(responses.GET, OPENMETEO_URL, json={"error": "down"}, status=500)
+        register_nws_error(status=500)
         route_request = make_route_request()
 
         result = generate_routes_task(str(route_request.id))
@@ -92,7 +93,7 @@ class WeatherFullFlowTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
         error = response.json()["error"]
         self.assertEqual(error["code"], "WEATHER_API_ERROR")
-        self.assertEqual(error["details"]["provider"], "open-meteo")
+        self.assertEqual(error["details"]["provider"], "nws")
 
         route_request.refresh_from_db()
         self.assertEqual(route_request.status, RouteRequest.Status.COMPLETED)

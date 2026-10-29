@@ -122,17 +122,18 @@ OPENROUTESERVICE_API_KEY = env("OPENROUTESERVICE_API_KEY", default="")
 OPENROUTESERVICE_BASE_URL = env(
     "OPENROUTESERVICE_BASE_URL", default="https://api.openrouteservice.org"
 )
+OSRM_BASE_URL = env("OSRM_BASE_URL", default="https://router.project-osrm.org")
 EXTERNAL_API_TIMEOUT = env.float("EXTERNAL_API_TIMEOUT", default=5.0)
 # Routing calls carry full geometries + alternatives; they get a longer budget.
 ROUTING_TIMEOUT = env.float("ROUTING_TIMEOUT", default=30.0)
-OSRM_BASE_URL = env("OSRM_BASE_URL", default="https://router.project-osrm.org")
 
-OPEN_METEO_BASE_URL = env(
-    "OPEN_METEO_BASE_URL", default="https://api.open-meteo.com/v1/forecast"
+OPENWEATHERMAP_API_KEY = env("OPENWEATHERMAP_API_KEY", default="")
+OPENWEATHERMAP_BASE_URL = env(
+    "OPENWEATHERMAP_BASE_URL", default="https://api.openweathermap.org/data/3.0/onecall"
 )
-# Open-Meteo is keyless; keep its live health probe opt-in so /health/ stays
-# fast and deterministic by default.
-OPEN_METEO_HEALTHCHECK_ENABLED = env.bool("OPEN_METEO_HEALTHCHECK_ENABLED", default=False)
+NWS_BASE_URL = env("NWS_BASE_URL", default="https://api.weather.gov")
+NWS_USER_AGENT = env("NWS_USER_AGENT", default="Routing-Assessment/1.0")
+NWS_HEALTHCHECK_ENABLED = env.bool("NWS_HEALTHCHECK_ENABLED", default=False)
 WEATHER_TIMEOUT = env.float("WEATHER_TIMEOUT", default=10.0)
 
 # ---------------------------------------------------------------------------

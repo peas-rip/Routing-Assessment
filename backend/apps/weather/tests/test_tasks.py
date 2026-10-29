@@ -6,34 +6,36 @@ Also covers generate_heatmap_task (F08).
 import json
 import uuid
 from unittest.mock import patch
-from urllib.parse import parse_qs, urlparse
 
 import responses
 from celery.exceptions import Retry
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.weather.exceptions import WeatherProviderError, WeatherRateLimitError
 from apps.weather.models import HeatmapCache, WeatherObservation
 from apps.weather.tasks import fetch_weather_for_checkpoints, generate_heatmap_task
 
 from .fixtures import (
-    MOCK_METEO_RESPONSE,
-    OPENMETEO_URL,
+    MOCK_NWS_RESPONSE,
+    NWS_FORECAST_URL,
+    NWS_POINTS_URL,
     make_checkpoint,
     make_checkpoints,
     make_heatmap_route,
-    mock_meteo_response,
+    nws_points_payload,
+    register_nws,
 )
 
 
+@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class FetchWeatherForCheckpointsTests(TestCase):
     def setUp(self):
         cache.clear()
 
     @responses.activate
     def test_creates_observations_for_all_checkpoints(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
+        register_nws()
         checkpoints = make_checkpoints()
         checkpoint_ids = [str(cp.id) for cp in checkpoints]
 
@@ -50,7 +52,7 @@ class FetchWeatherForCheckpointsTests(TestCase):
         )
         self.assertEqual(
             WeatherObservation.objects.get(checkpoint=checkpoints[2]).precipitation_type,
-            "snow",
+            "rain",
         )
 
     @responses.activate
@@ -65,7 +67,7 @@ class FetchWeatherForCheckpointsTests(TestCase):
 
     @responses.activate
     def test_provider_error_propagates_when_called_directly(self):
-        responses.add(responses.GET, OPENMETEO_URL, json={"error": "boom"}, status=500)
+        responses.add(responses.GET, NWS_POINTS_URL, json={}, status=500)
         checkpoint = make_checkpoint()
         checkpoint_ids = [str(checkpoint.id)]
 
@@ -79,7 +81,7 @@ class FetchWeatherForCheckpointsTests(TestCase):
 
     @responses.activate
     def test_provider_error_retries_until_exhausted(self):
-        responses.add(responses.GET, OPENMETEO_URL, json={"error": "boom"}, status=500)
+        responses.add(responses.GET, NWS_POINTS_URL, json={}, status=500)
         checkpoint = make_checkpoint()
         checkpoint_ids = [str(checkpoint.id)]
 
@@ -93,7 +95,7 @@ class FetchWeatherForCheckpointsTests(TestCase):
 
     @responses.activate
     def test_rate_limit_retries_until_exhausted(self):
-        responses.add(responses.GET, OPENMETEO_URL, json={}, status=429)
+        responses.add(responses.GET, NWS_POINTS_URL, json={}, status=429)
         checkpoint = make_checkpoint()
         checkpoint_ids = [str(checkpoint.id)]
 
@@ -104,7 +106,7 @@ class FetchWeatherForCheckpointsTests(TestCase):
 
     @responses.activate
     def test_provider_error_schedules_retry_when_attempts_remain(self):
-        responses.add(responses.GET, OPENMETEO_URL, json={"error": "boom"}, status=500)
+        responses.add(responses.GET, NWS_POINTS_URL, json={}, status=500)
         checkpoint = make_checkpoint()
         checkpoint_ids = [str(checkpoint.id)]
 
@@ -119,17 +121,18 @@ class FetchWeatherForCheckpointsTests(TestCase):
     @responses.activate
     def test_partial_failure_completes_with_successful_buckets(self):
         def conditional(request):
-            query = parse_qs(urlparse(request.url).query)
-            if query["latitude"][0].startswith("40."):
+            # NWS resolves a grid via /points/{lat},{lon}; fail coords near 40.
+            if "/40." in request.url:
                 return (500, {}, '{"error": "boom"}')
-            return (200, {}, json.dumps(MOCK_METEO_RESPONSE))
+            return (200, {}, json.dumps(nws_points_payload()))
 
         responses.add_callback(
             responses.GET,
-            OPENMETEO_URL,
+            NWS_POINTS_URL,
             callback=conditional,
             content_type="application/json",
         )
+        responses.add(responses.GET, NWS_FORECAST_URL, json=MOCK_NWS_RESPONSE)
         checkpoints = make_checkpoints()  # third checkpoint lives at lat 40.0
         checkpoint_ids = [str(cp.id) for cp in checkpoints]
 
@@ -144,7 +147,7 @@ class FetchWeatherForCheckpointsTests(TestCase):
 
     @responses.activate
     def test_risk_enqueue_failure_does_not_fail_weather_fetch(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
+        register_nws()
         checkpoint = make_checkpoint()
 
         with patch(
@@ -157,13 +160,14 @@ class FetchWeatherForCheckpointsTests(TestCase):
         self.assertEqual(WeatherObservation.objects.count(), 1)
 
 
+@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class GenerateHeatmapTaskTests(TestCase):
     def setUp(self):
         cache.clear()
 
     @responses.activate
     def test_generates_and_caches_grid(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
+        register_nws()
         route = make_heatmap_route()
 
         result = generate_heatmap_task(str(route.id), 6)

@@ -1,5 +1,6 @@
-"""Mock Open-Meteo payloads and shared builders for weather tests."""
+"""Mock NWS payloads and shared builders for weather tests."""
 
+import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -10,81 +11,71 @@ from apps.routing.models import Checkpoint
 from apps.routing.tests.fixtures import make_route
 from apps.weather.models import WeatherObservation
 
-OPENMETEO_URL = "https://api.open-meteo.com/v1/forecast"
+# The NWS client resolves a grid office via /points/ then fetches the hourly
+# forecast from the returned forecastHourly URL; a regex matches any coords.
+NWS_POINTS_URL = re.compile(r"https://api\.weather\.gov/points/.*")
+NWS_FORECAST_URL = "https://api.weather.gov/gridpoints/LOT/73,71/forecast/hourly"
 
-# docs/SERVICES/weather/TESTING.md fixture: hour-8 slight-rain entry + hour-9
-# heavy-snow entry (ISO times are fixed UTC; tests match on hour-of-day only).
-MOCK_METEO_RESPONSE = {
-    "latitude": 39.78,
-    "longitude": -89.65,
-    "timezone": "UTC",
-    "hourly": {
-        "time": ["2023-12-27T08:00", "2023-12-27T09:00"],
-        "temperature_2m": [45.2, 32.1],
-        "relative_humidity_2m": [65, 85],
-        "wind_speed_10m": [12.5, 38.0],
-        "wind_direction_10m": [230, 310],
-        "wind_gusts_10m": [18.0, 45.0],
-        "rain": [0.08, 0],
-        "snowfall": [0, 1.5],
-        "weather_code": [61, 75],  # slight rain, heavy snow
-    },
-}
-
-MOCK_METEO_MIXED = {
-    "latitude": 39.78,
-    "longitude": -89.65,
-    "timezone": "UTC",
-    "hourly": {
-        "time": ["2023-12-27T08:00"],
-        "temperature_2m": [34.0],
-        "relative_humidity_2m": [80],
-        "wind_speed_10m": [10.0],
-        "wind_direction_10m": [180],
-        "wind_gusts_10m": [None],
-        "rain": [0.2],
-        "snowfall": [0.5],
-        "weather_code": [3],  # overcast
-    },
-}
-
-MOCK_METEO_CLEAR = {
-    "latitude": 39.78,
-    "longitude": -89.65,
-    "timezone": "UTC",
-    "hourly": {
-        "time": ["2023-12-27T08:00"],
-        "temperature_2m": [70],
-        "relative_humidity_2m": [40],
-        "wind_speed_10m": [5],
-        "wind_direction_10m": [90],
-        "wind_gusts_10m": [None],
-        "rain": [0],
-        "snowfall": [0],
-        "weather_code": [0],  # clear sky
-    },
-}
+BASE_TIME = datetime(2023, 12, 27, 8, 0, tzinfo=UTC)
 
 
-def mock_meteo_response(hours: int = 48) -> dict:
-    """Open-Meteo payload covering every hour-of-day (dynamic: no hardcoded dates)."""
-    base_hour = int(timezone.now().timestamp()) // 3600 * 3600
-    time_series = [
-        datetime.fromtimestamp(base_hour + offset * 3600, tz=UTC).strftime("%Y-%m-%dT%H:%M")
-        for offset in range(hours)
-    ]
-    hourly = {
-        "time": time_series,
-        "temperature_2m": [45.2] * hours,
-        "relative_humidity_2m": [65] * hours,
-        "wind_speed_10m": [12.5] * hours,
-        "wind_direction_10m": [230] * hours,
-        "wind_gusts_10m": [18.0] * hours,
-        "rain": [0.08] * hours,
-        "snowfall": [0.0] * hours,
-        "weather_code": [61] * hours,
-    }
-    return {"latitude": 39.78, "longitude": -89.65, "timezone": "UTC", "hourly": hourly}
+def nws_points_payload() -> dict:
+    return {"properties": {"forecastHourly": NWS_FORECAST_URL}}
+
+
+def nws_forecast_payload(
+    hours: int = 48,
+    temp: float = 45.2,
+    wind: float = 12.5,
+    wind_dir: int = 230,
+    pop: int = 8,
+    short: str = "Light Rain",
+) -> dict:
+    periods = []
+    for i in range(hours):
+        periods.append(
+            {
+                "startTime": (BASE_TIME + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%S+00:00"),
+                "temperature": temp,
+                "windSpeed": {"value": wind, "unitCode": "wmoUnit:miles_per_hour"},
+                "windDirection": {"value": wind_dir},
+                "probabilityOfPrecipitation": {"value": pop},
+                "shortForecast": short,
+            }
+        )
+    return {"properties": {"periods": periods}}
+
+
+def register_nws(
+    hours: int = 48,
+    temp: float = 45.2,
+    wind: float = 12.5,
+    wind_dir: int = 230,
+    pop: int = 8,
+    short: str = "Light Rain",
+) -> None:
+    """Register mock NWS points + hourly-forecast responses."""
+    import responses
+
+    responses.add(responses.GET, NWS_POINTS_URL, json=nws_points_payload())
+    responses.add(
+        responses.GET,
+        NWS_FORECAST_URL,
+        json=nws_forecast_payload(hours, temp, wind, wind_dir, pop, short),
+    )
+
+
+def register_nws_error(status: int = 500, retry_after: int | None = None) -> None:
+    """Register an NWS error response on the /points/ step."""
+    import responses
+
+    headers = {"Retry-After": str(retry_after)} if retry_after else {}
+    responses.add(responses.GET, NWS_POINTS_URL, json={}, status=status, headers=headers)
+
+
+MOCK_NWS_RESPONSE = nws_forecast_payload()
+MOCK_NWS_SNOW = nws_forecast_payload(pop=90, short="Heavy Snow")
+MOCK_NWS_CLEAR = nws_forecast_payload(pop=0, short="Clear")
 
 
 def future_arrival(hour: int = 8, minute: int = 25):
@@ -126,7 +117,7 @@ def make_checkpoints() -> list[Checkpoint]:
             longitude=-89.6501,
             estimated_arrival=future_arrival(8),
             sequence=1,
-        ),  # duplicate (lat, lon, hour) bucket
+        ),
         make_checkpoint(
             latitude=40.0000,
             longitude=-89.0000,
@@ -150,9 +141,9 @@ def make_observation(checkpoint: Checkpoint, fetched_at=None, **overrides) -> We
         "temperature_f": Decimal("45.20"),
         "humidity_pct": 65,
         "visibility_mi": None,
-        "conditions": "slight rain",
-        "raw_response": MOCK_METEO_RESPONSE,
-        "source": "open-meteo",
+        "conditions": "Light Rain",
+        "raw_response": MOCK_NWS_RESPONSE,
+        "source": "nws",
     }
     defaults.update(overrides)
     observation = WeatherObservation.objects.create(checkpoint=checkpoint, **defaults)

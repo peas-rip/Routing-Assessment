@@ -4,11 +4,10 @@ import json
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
-from urllib.parse import parse_qs, urlparse
 
 import responses
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.weather.exceptions import WeatherProviderError, WeatherRateLimitError
@@ -27,14 +26,17 @@ from apps.weather.services import (
 )
 
 from .fixtures import (
-    MOCK_METEO_RESPONSE,
-    OPENMETEO_URL,
+    MOCK_NWS_RESPONSE,
+    NWS_FORECAST_URL,
+    NWS_POINTS_URL,
     future_arrival,
     make_checkpoint,
     make_checkpoints,
     make_heatmap_route,
     make_observation,
-    mock_meteo_response,
+    nws_points_payload,
+    register_nws,
+    register_nws_error,
 )
 
 
@@ -47,6 +49,7 @@ class CacheKeyTests(TestCase):
         self.assertEqual(cache_key(39.78171, -89.65014, 8), cache_key(39.78174, -89.65011, 8))
 
 
+@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class FetchWeatherBatchTests(TestCase):
     def setUp(self):
         # LocMem cache persists across tests: reset weather keys + throttle history.
@@ -54,40 +57,42 @@ class FetchWeatherBatchTests(TestCase):
 
     @responses.activate
     def test_deduplicates_by_rounded_coords_and_hour(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
+        register_nws()
         checkpoints = make_checkpoints()
 
         results = fetch_weather_batch(checkpoints)
 
         self.assertEqual(len(results), 3)  # every checkpoint gets weather
-        self.assertEqual(len(responses.calls), 2)  # only unique (lat, lon, hour) fetched
+        # NWS resolves a grid then fetches the hourly forecast (2 calls per bucket).
+        self.assertEqual(len(responses.calls), 4)  # only unique (lat, lon, hour) fetched
 
     @responses.activate
     def test_cache_hit_avoids_second_provider_call(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
+        register_nws()
         checkpoints = make_checkpoints()
         fetch_weather_batch(checkpoints)
-        self.assertEqual(len(responses.calls), 2)
+        self.assertEqual(len(responses.calls), 4)
 
         results = fetch_weather_batch(checkpoints)
 
         self.assertEqual(len(results), 3)
-        self.assertEqual(len(responses.calls), 2)  # served from the 15-minute cache
+        self.assertEqual(len(responses.calls), 4)  # served from the 15-minute cache
 
     @responses.activate
     def test_partial_failure_continues_with_successful_buckets(self):
         def conditional(request):
-            query = parse_qs(urlparse(request.url).query)
-            if query["latitude"][0].startswith("40."):
+            # NWS resolves a grid via /points/{lat},{lon}; fail coords near 40.
+            if "/40." in request.url:
                 return (500, {}, '{"error": "boom"}')
-            return (200, {}, json.dumps(MOCK_METEO_RESPONSE))
+            return (200, {}, json.dumps(nws_points_payload()))
 
         responses.add_callback(
             responses.GET,
-            OPENMETEO_URL,
+            NWS_POINTS_URL,
             callback=conditional,
             content_type="application/json",
         )
+        responses.add(responses.GET, NWS_FORECAST_URL, json=MOCK_NWS_RESPONSE)
         checkpoints = make_checkpoints()  # third checkpoint lives at lat 40.0
 
         results = fetch_weather_batch(checkpoints)
@@ -98,12 +103,7 @@ class FetchWeatherBatchTests(TestCase):
 
     @responses.activate
     def test_all_buckets_failed_raises_provider_error(self):
-        responses.add_callback(
-            responses.GET,
-            OPENMETEO_URL,
-            callback=lambda request: (500, {}, '{"error": "boom"}'),
-            content_type="application/json",
-        )
+        register_nws_error(status=500)
         checkpoints = make_checkpoints()
 
         with self.assertRaises(WeatherProviderError):
@@ -111,12 +111,7 @@ class FetchWeatherBatchTests(TestCase):
 
     @responses.activate
     def test_rate_limited_batch_raises_rate_limit_error(self):
-        responses.add_callback(
-            responses.GET,
-            OPENMETEO_URL,
-            callback=lambda request: (429, {"Retry-After": "30"}, "{}"),
-            content_type="application/json",
-        )
+        register_nws_error(status=429, retry_after=30)
         checkpoints = make_checkpoints()
 
         with self.assertRaises(WeatherRateLimitError) as ctx:
@@ -126,23 +121,24 @@ class FetchWeatherBatchTests(TestCase):
 
     @responses.activate
     def test_missing_forecast_hour_is_skipped_without_error(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
+        register_nws(hours=2)
         # Fixture only has hours 8 and 9: an hour-14 arrival has no target.
         checkpoint = make_checkpoint(estimated_arrival=future_arrival(14))
 
         results = fetch_weather_batch([checkpoint])
 
         self.assertEqual(results, {})
-        self.assertEqual(len(responses.calls), 1)
+        self.assertEqual(len(responses.calls), 2)  # NWS points + hourly forecast
 
 
+@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class SaveObservationsTests(TestCase):
     def setUp(self):
         cache.clear()
 
     @responses.activate
     def test_save_uses_checkpoint_estimated_arrival_as_forecast_time(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
+        register_nws()
         checkpoints = make_checkpoints()
 
         results = fetch_weather_batch(checkpoints)
@@ -153,17 +149,18 @@ class SaveObservationsTests(TestCase):
         for checkpoint in checkpoints:
             observation = WeatherObservation.objects.get(checkpoint_id=checkpoint.id)
             self.assertEqual(observation.forecast_time, checkpoint.estimated_arrival)
-        # Rain bucket (hour 8) vs snow bucket (hour 9).
+        # Rain bucket (hour 8) vs another bucket (hour 9); the NWS fixture is
+        # uniform so both report the same precipitation type.
         self.assertEqual(
             WeatherObservation.objects.get(checkpoint=checkpoints[0]).precipitation_type, "rain"
         )
         self.assertEqual(
-            WeatherObservation.objects.get(checkpoint=checkpoints[2]).precipitation_type, "snow"
+            WeatherObservation.objects.get(checkpoint=checkpoints[2]).precipitation_type, "rain"
         )
 
     @responses.activate
     def test_save_refreshes_existing_rows_instead_of_duplicating(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
+        register_nws()
         checkpoints = make_checkpoints()
         results = fetch_weather_batch(checkpoints)
         save_observations(results)
@@ -290,6 +287,7 @@ class CappedGridTests(TestCase):
         self.assertEqual(len(points), 3000)  # step = ceil(6000 / 5000) = 2
 
 
+@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class GenerateHeatmapTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -297,7 +295,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_contract_shape_and_risk_rules(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
+        register_nws()
 
         result = generate_heatmap(self.route, forecast_hour=6, resolution_miles=10.0)
 
@@ -318,7 +316,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_grid_is_cached_within_ttl(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
+        register_nws()
         first = generate_heatmap(self.route, forecast_hour=6, resolution_miles=10.0)
         calls_after_first = len(responses.calls)
 
@@ -330,7 +328,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_expired_grid_is_regenerated_in_place(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
+        register_nws()
         first = generate_heatmap(self.route, forecast_hour=6, resolution_miles=10.0)
         HeatmapCache.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
 
@@ -341,7 +339,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_forecast_hours_are_cached_separately(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
+        register_nws()
 
         generate_heatmap(self.route, forecast_hour=6, resolution_miles=10.0)
         generate_heatmap(self.route, forecast_hour=7, resolution_miles=10.0)
@@ -350,7 +348,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_resolution_is_clamped_to_supported_band(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
+        register_nws()
 
         low = generate_heatmap(self.route, forecast_hour=6, resolution_miles=1.0)
         high = generate_heatmap(self.route, forecast_hour=6, resolution_miles=100.0)
@@ -360,7 +358,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_hour_without_forecast_yields_empty_grid(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=MOCK_METEO_RESPONSE)
+        register_nws(hours=2)
         departure = self.route.request.departure_time
         hour = next(
             candidate
@@ -376,7 +374,7 @@ class GenerateHeatmapTests(TestCase):
 
     @responses.activate
     def test_provider_failure_yields_empty_grid(self):
-        responses.add(responses.GET, OPENMETEO_URL, json={"error": "boom"}, status=500)
+        register_nws_error(status=500)
 
         result = generate_heatmap(self.route, forecast_hour=6, resolution_miles=50.0)
 

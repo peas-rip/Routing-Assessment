@@ -14,10 +14,9 @@ from .base import *  # noqa: F401,F403
 
 DEBUG = False
 
-# Keep the routing/geocoding key empty in tests so missing-credential behavior
-# is deterministic. Open-Meteo is keyless; its opt-in health probe stays off.
+# Keep provider keys empty in tests so missing-credential behavior is deterministic.
 OPENROUTESERVICE_API_KEY = ""
-OPEN_METEO_HEALTHCHECK_ENABLED = False
+OPENWEATHERMAP_API_KEY = ""
 
 POSTGIS_ENGINE = "django.contrib.gis.db.backends.postgis"
 

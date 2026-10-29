@@ -15,11 +15,10 @@ from apps.routing.tests.fixtures import make_route, make_route_request
 from apps.weather.models import WeatherObservation
 from apps.weather.tasks import fetch_weather_for_checkpoints
 from apps.weather.tests.fixtures import (
-    OPENMETEO_URL,
     future_arrival,
     make_checkpoint,
     make_observation,
-    mock_meteo_response,
+    register_nws,
 )
 
 from .fixtures import make_scored_route
@@ -48,6 +47,7 @@ def build_route_with_weather(request, spec, **route_overrides):
     return route
 
 
+@override_settings(OPENWEATHERMAP_API_KEY="test-key")
 class RiskPipelineTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -108,7 +108,7 @@ class RiskPipelineTests(TestCase):
 
     @responses.activate
     def test_weather_fetch_enqueues_risk_assessments(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
+        register_nws()
         request = make_route_request()
         route = make_route(request)
         checkpoint = make_checkpoint(
@@ -130,7 +130,7 @@ class RiskPipelineTests(TestCase):
 
     @responses.activate
     def test_refetched_weather_reassesses_risk_in_place(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
+        register_nws()
         request = make_route_request()
         route = make_route(request)
         checkpoint = make_checkpoint(
@@ -145,11 +145,7 @@ class RiskPipelineTests(TestCase):
 
         # The provider now reports 60 mph winds for every hour.
         responses.reset()
-        storm = mock_meteo_response()
-        storm["hourly"]["wind_speed_10m"] = [
-            60.0 for _ in storm["hourly"]["wind_speed_10m"]
-        ]
-        responses.add(responses.GET, OPENMETEO_URL, json=storm)
+        register_nws(wind=60.0, pop=0, short="Clear")
         cache.clear()  # bypass the 15-minute forecast cache
 
         fetch_weather_for_checkpoints([str(checkpoint.id)])
@@ -162,7 +158,7 @@ class RiskPipelineTests(TestCase):
     @override_settings(INSTALLED_APPS=RISK_STRIPPED_APPS)
     @responses.activate
     def test_risk_enqueue_is_skipped_without_the_risk_app(self):
-        responses.add(responses.GET, OPENMETEO_URL, json=mock_meteo_response())
+        register_nws()
         request = make_route_request()
         route = make_route(request)
         checkpoint = make_checkpoint(

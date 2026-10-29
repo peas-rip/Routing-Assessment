@@ -1,0 +1,153 @@
+"""National Weather Service (NWS / NOAA) forecast client (keyless, US-only).
+
+Responsibilities: HTTP transport, timeouts, provider error mapping and
+hourly forecast parsing. NWS is completely free (no API key, no credit card)
+and covers the United States only.
+
+NWS uses a two-step API: ``/points/{lat},{lon}`` resolves a grid office, then
+the ``forecastHourly`` URL returns hourly periods. The client hides both steps
+behind the same ``fetch``/``fetch_hourly`` interface the other providers use.
+"""
+
+import logging
+import time
+from datetime import UTC, datetime
+from typing import NamedTuple
+
+import requests
+from django.conf import settings
+
+from apps.weather.exceptions import WeatherProviderError, WeatherRateLimitError
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_RETRY_AFTER = 60
+MAX_HOURS = 48
+POINTS_PATH = "https://api.weather.gov/points/{lat},{lon}"
+USER_AGENT_HEADER = "User-Agent"
+
+
+def _conditions_from_text(short_forecast: str) -> str:
+    return short_forecast or ""
+
+
+class HourlyForecast(NamedTuple):
+    """One parsed hourly forecast entry."""
+
+    dt: datetime
+    temp_f: float
+    humidity: int
+    wind_speed_mph: float
+    wind_deg: int
+    wind_gust_mph: float | None
+    precipitation_rate_in_hr: float
+    precipitation_type: str
+    snowfall_rate_in_hr: float
+    conditions: str
+    visibility_mi: float | None = None
+
+
+class WeatherClient:
+    """Thin, testable wrapper around the NWS forecast API."""
+
+    def __init__(self, timeout: float | None = None, base_url: str | None = None):
+        self.timeout = timeout if timeout is not None else settings.WEATHER_TIMEOUT
+        self.base_url = base_url or settings.NWS_BASE_URL
+        self.session = requests.Session()
+        self.session.headers.update(
+            {
+                USER_AGENT_HEADER: getattr(settings, "NWS_USER_AGENT", "Routing-Assessment/1.0"),
+                "Accept": "application/geo+json",
+            }
+        )
+
+    def fetch_hourly(self, lat: float, lon: float) -> list[HourlyForecast]:
+        return self.fetch(lat, lon)[0]
+
+    def fetch(self, lat: float, lon: float) -> tuple[list[HourlyForecast], dict]:
+        points = self._get_json(POINTS_PATH.format(lat=lat, lon=lon))
+        properties = (points or {}).get("properties") or {}
+        forecast_url = properties.get("forecastHourly")
+        if not forecast_url:
+            raise WeatherProviderError("Weather provider returned an invalid response.")
+
+        forecast = self._get_json(forecast_url)
+        periods = ((forecast or {}).get("properties") or {}).get("periods")
+        if not isinstance(periods, list):
+            raise WeatherProviderError("Weather provider returned an invalid response.")
+
+        try:
+            forecasts = [self._parse_period(p) for p in periods[:MAX_HOURS]]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise WeatherProviderError("Weather provider returned an invalid response.") from exc
+        if not forecasts:
+            raise WeatherProviderError("Weather provider returned an invalid response.")
+        return forecasts, forecast
+
+    def _parse_period(self, period: dict) -> HourlyForecast:
+        start = period.get("startTime")
+        dt = datetime.fromisoformat(start).astimezone(UTC) if start else datetime.now(tz=UTC)
+        temp = period.get("temperature") or 0
+        wind_speed = period.get("windSpeed") or {}
+        # NWS windSpeed may be a dict {"value": 10, "unitCode": ...} or a string.
+        if isinstance(wind_speed, dict):
+            speed_val = wind_speed.get("value") or 0
+        else:
+            try:
+                speed_val = float(str(wind_speed).split()[0])
+            except (ValueError, IndexError):
+                speed_val = 0
+        wind_dir = period.get("windDirection") or {}
+        wind_deg = int(wind_dir.get("value") or 0) if isinstance(wind_dir, dict) else 0
+        pop = period.get("probabilityOfPrecipitation") or {}
+        pop_pct = int(pop.get("value") or 0) if isinstance(pop, dict) else 0
+        short = period.get("shortForecast") or ""
+        text = short.lower()
+        if "snow" in text:
+            precip_type = "snow"
+        elif "rain" in text or "shower" in text or "drizzle" in text:
+            precip_type = "rain"
+        else:
+            precip_type = "none"
+        # NWS gives a probability of precipitation, not a rate; approximate an
+        # intensity (0-1 in/hr) from the percentage for risk scoring.
+        rate = round(pop_pct / 100.0, 2)
+        snowfall = rate if precip_type == "snow" else 0.0
+        return HourlyForecast(
+            dt=dt,
+            temp_f=float(temp),
+            humidity=0,
+            wind_speed_mph=float(speed_val),
+            wind_deg=wind_deg,
+            wind_gust_mph=None,
+            precipitation_rate_in_hr=rate,
+            precipitation_type=precip_type,
+            snowfall_rate_in_hr=snowfall,
+            conditions=_conditions_from_text(short),
+            visibility_mi=None,
+        )
+
+    def _get_json(self, url: str) -> dict:
+        started = time.monotonic()
+        try:
+            response = self.session.get(url, timeout=self.timeout)
+        except requests.RequestException as exc:
+            logger.warning("Weather provider request failed: %s", exc.__class__.__name__)
+            raise WeatherProviderError(
+                "Weather provider is unavailable.", details={"reason": exc.__class__.__name__}
+            ) from exc
+        finally:
+            logger.debug("Weather provider GET completed in %.3fs", time.monotonic() - started)
+
+        if response.status_code == 429:
+            retry_after = int(response.headers.get("Retry-After", DEFAULT_RETRY_AFTER))
+            raise WeatherRateLimitError(retry_after)
+        if response.status_code >= 400:
+            raise WeatherProviderError(
+                "Weather provider returned an error.",
+                details={"status_code": response.status_code},
+            )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise WeatherProviderError("Weather provider returned an invalid response.") from exc

@@ -52,8 +52,9 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY:-}
-      - OPEN_METEO_BASE_URL=${OPEN_METEO_BASE_URL:-https://api.open-meteo.com/v1/forecast}
-      - OPEN_METEO_HEALTHCHECK_ENABLED=${OPEN_METEO_HEALTHCHECK_ENABLED:-0}
+      - OSRM_BASE_URL=${OSRM_BASE_URL:-https://router.project-osrm.org}
+      - NWS_BASE_URL=${NWS_BASE_URL:-https://api.weather.gov}
+      - NWS_USER_AGENT=${NWS_USER_AGENT:-Routing-Assessment/1.0}
 
   celery:
     build:
@@ -75,8 +76,9 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY:-}
-      - OPEN_METEO_BASE_URL=${OPEN_METEO_BASE_URL:-https://api.open-meteo.com/v1/forecast}
-      - OPEN_METEO_HEALTHCHECK_ENABLED=${OPEN_METEO_HEALTHCHECK_ENABLED:-0}
+      - OSRM_BASE_URL=${OSRM_BASE_URL:-https://router.project-osrm.org}
+      - NWS_BASE_URL=${NWS_BASE_URL:-https://api.weather.gov}
+      - NWS_USER_AGENT=${NWS_USER_AGENT:-Routing-Assessment/1.0}
       # django owns migrations; running them from both services races on
       # CREATE EXTENSION postgis and crashes one of them.
       - SKIP_MIGRATIONS=1

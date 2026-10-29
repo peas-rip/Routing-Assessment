@@ -16,7 +16,7 @@ class WeatherProviderError(WeatherError):
     """The upstream weather provider failed or returned an unusable response."""
 
     def __init__(self, message="Weather provider request failed.", details=None):
-        merged = {"provider": "open-meteo"}
+        merged = {"provider": "nws"}
         if details:
             merged.update(details)
         super().__init__(
