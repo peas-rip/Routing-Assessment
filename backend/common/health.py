@@ -33,7 +33,7 @@ class HealthCheckView(APIView):
         checks = {
             "database": self.check_database(),
             "redis": self.check_redis(),
-            "openrouteservice": self.check_openrouteservice(),
+            "geocoding": self.check_geocoding(),
             "nws": self.check_nws(),
         }
         healthy = all(v in NON_FATAL_STATUSES for v in checks.values())
@@ -67,19 +67,25 @@ class HealthCheckView(APIView):
             return CHECK_ERROR
         return CHECK_OK
 
-    def check_openrouteservice(self):
-        if not settings.OPENROUTESERVICE_API_KEY:
-            return CHECK_NOT_CONFIGURED
+    def check_geocoding(self):
+        provider = settings.GEOCODING_PROVIDER
+        if provider == "openrouteservice":
+            if not settings.OPENROUTESERVICE_API_KEY:
+                return CHECK_NOT_CONFIGURED
+        else:
+            # Photon is keyless; keep its live probe opt-in.
+            if not settings.PHOTON_HEALTHCHECK_ENABLED:
+                return CHECK_NOT_CONFIGURED
 
-        from apps.geocoding.clients.openrouteservice import GeocodingClient
         from apps.geocoding.exceptions import RateLimitError
+        from apps.geocoding.services import _get_client
 
         try:
-            GeocodingClient().search("test", limit=1)
+            _get_client().search("test", limit=1)
         except RateLimitError:
             return CHECK_RATE_LIMITED
         except Exception:
-            logger.exception("Health check: openrouteservice request failed")
+            logger.exception("Health check: geocoding provider request failed")
             return CHECK_ERROR
         return CHECK_OK
 

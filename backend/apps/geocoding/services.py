@@ -13,21 +13,17 @@ import logging
 import time
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.cache import cache
 from django.db import DatabaseError
 from django.utils import timezone
 
-from .clients.openrouteservice import (
-    GeocodingClient,
-    parse_reverse_payload,
-    parse_search_payload,
-)
 from .exceptions import GeocodingNotFoundError
 from .models import GeocodeCache, QueryType
 
 logger = logging.getLogger(__name__)
 
-SOURCE = "openrouteservice"
+SOURCE = getattr(settings, "GEOCODING_PROVIDER", "openrouteservice")
 REDIS_TTL_SECONDS = 3600
 DB_TTL_DAYS = 30
 SEARCH_CACHE_PREFIX = "geocode:search"
@@ -97,8 +93,35 @@ def _store_db_cache(
         logger.warning("Geocode DB cache write failed", exc_info=True)
 
 
-def _get_client() -> GeocodingClient:
+def _get_client():
+    """Return the configured geocoding provider client."""
+    if settings.GEOCODING_PROVIDER == "photon":
+        from .clients.photon import GeocodingClient
+
+        return GeocodingClient()
+    from .clients.openrouteservice import GeocodingClient
+
     return GeocodingClient()
+
+
+def _parse_search(raw):
+    if settings.GEOCODING_PROVIDER == "photon":
+        from .clients.photon import parse_search_payload
+
+        return parse_search_payload(raw)
+    from .clients.openrouteservice import parse_search_payload
+
+    return parse_search_payload(raw)
+
+
+def _parse_reverse(raw):
+    if settings.GEOCODING_PROVIDER == "photon":
+        from .clients.photon import parse_reverse_payload
+
+        return parse_reverse_payload(raw)
+    from .clients.openrouteservice import parse_reverse_payload
+
+    return parse_reverse_payload(raw)
 
 
 def search(
@@ -118,7 +141,7 @@ def search(
         .first()
     )
     if db_cached:
-        results = parse_search_payload(db_cached.raw_response)
+        results = _parse_search(db_cached.raw_response)
         if len(results) >= limit:
             results = results[:limit]
             _cache_set(cache_key, results)
@@ -172,7 +195,7 @@ def reverse(lat: float, lon: float) -> tuple[dict, bool]:
         .first()
     )
     if db_cached:
-        result = parse_reverse_payload(db_cached.raw_response)
+        result = _parse_reverse(db_cached.raw_response)
         if result:
             _cache_set(cache_key, result)
             return result, True

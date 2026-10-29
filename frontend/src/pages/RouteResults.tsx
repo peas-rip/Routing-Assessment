@@ -61,16 +61,44 @@ export default function RouteResults() {
 
   const selected = routes.find((r) => r.id === selectedId) ?? routes[0];
 
-  // Risk recommendation for the whole request (uses any route id).
+  // Risk recommendation: calculate risk for every route first (the
+  // recommendation endpoint needs assessments for at least two routes), then
+  // retry until scoring is ready (weather can take a while).
   useEffect(() => {
     if (routes.length === 0) return;
-    api
-      .get(`/risk/recommendation/${routes[0].id}/`)
-      .then((res) => {
-        setRecommendedId(res.data.data.recommended_route_id);
-        setSelectedId((prev) => prev ?? res.data.data.recommended_route_id);
-      })
-      .catch(() => {});
+    const meta = JSON.parse(sessionStorage.getItem("routeMeta") || "{}");
+    const lw = meta.loadWeight ?? 30000;
+    const iv = meta.interval ?? 25;
+    let cancelled = false;
+    const run = async () => {
+      await Promise.all(
+        routes.map((r) =>
+          api
+            .post("/risk/calculate/", {
+              route_id: r.id,
+              load_weight_lbs: lw,
+              checkpoint_interval_miles: iv,
+            })
+            .catch(() => {}),
+        ),
+      );
+      if (cancelled) return;
+      for (let i = 0; i < 12; i++) {
+        try {
+          const res = await api.get(`/risk/recommendation/${routes[0].id}/`);
+          if (cancelled) return;
+          setRecommendedId(res.data.data.recommended_route_id);
+          setSelectedId((prev) => prev ?? res.data.data.recommended_route_id);
+          return;
+        } catch {
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
   }, [routes]);
 
   // Per-checkpoint risk via the risk calculate endpoint for the selected route.
@@ -212,19 +240,18 @@ export default function RouteResults() {
 
         <div className="bg-slate-900 border border-slate-800 rounded p-4 space-y-2">
           <h2 className="font-semibold">Weather heatmap</h2>
-          <div className="text-sm text-slate-400">Forecast hour: {hour}</div>
-          <input
-            type="range"
-            min={0}
-            max={48}
+          <label className="block text-sm text-slate-400">Forecast hour</label>
+          <select
             value={hour}
             onChange={(e) => setHour(Number(e.target.value))}
-            className="w-full"
-          />
-          <div className="flex justify-between text-xs text-slate-500">
-            <span>Now</span>
-            <span>+48h</span>
-          </div>
+            className="w-full p-2 rounded bg-slate-800 border border-slate-700"
+          >
+            {[0, 6, 12, 18, 24, 30, 36, 42, 48].map((h) => (
+              <option key={h} value={h}>
+                {h === 0 ? "Now" : `+${h}h`}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
     </div>

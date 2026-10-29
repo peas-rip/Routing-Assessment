@@ -17,6 +17,7 @@ DEBUG = False
 # Keep provider keys empty in tests so missing-credential behavior is deterministic.
 OPENROUTESERVICE_API_KEY = ""
 OPENWEATHERMAP_API_KEY = ""
+PHOTON_HEALTHCHECK_ENABLED = False
 
 POSTGIS_ENGINE = "django.contrib.gis.db.backends.postgis"
 

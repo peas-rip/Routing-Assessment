@@ -122,6 +122,10 @@ OPENROUTESERVICE_API_KEY = env("OPENROUTESERVICE_API_KEY", default="")
 OPENROUTESERVICE_BASE_URL = env(
     "OPENROUTESERVICE_BASE_URL", default="https://api.openrouteservice.org"
 )
+# Geocoding provider toggle: "openrouteservice" or "photon" (keyless).
+GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="openrouteservice")
+PHOTON_BASE_URL = env("PHOTON_BASE_URL", default="https://photon.komoot.io")
+PHOTON_HEALTHCHECK_ENABLED = env.bool("PHOTON_HEALTHCHECK_ENABLED", default=False)
 OSRM_BASE_URL = env("OSRM_BASE_URL", default="https://router.project-osrm.org")
 EXTERNAL_API_TIMEOUT = env.float("EXTERNAL_API_TIMEOUT", default=5.0)
 # Routing calls carry full geometries + alternatives; they get a longer budget.
@@ -134,7 +138,7 @@ OPENWEATHERMAP_BASE_URL = env(
 NWS_BASE_URL = env("NWS_BASE_URL", default="https://api.weather.gov")
 NWS_USER_AGENT = env("NWS_USER_AGENT", default="Routing-Assessment/1.0")
 NWS_HEALTHCHECK_ENABLED = env.bool("NWS_HEALTHCHECK_ENABLED", default=False)
-WEATHER_TIMEOUT = env.float("WEATHER_TIMEOUT", default=10.0)
+WEATHER_TIMEOUT = env.float("WEATHER_TIMEOUT", default=30.0)
 
 # ---------------------------------------------------------------------------
 # Django REST Framework

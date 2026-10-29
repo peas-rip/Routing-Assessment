@@ -22,7 +22,7 @@ class HealthCheckTests(APITestCase):
         self.assertEqual(body["status"], "healthy")
         self.assertEqual(body["checks"]["database"], "ok")
         self.assertEqual(body["checks"]["redis"], "ok")
-        self.assertEqual(body["checks"]["openrouteservice"], "not_configured")
+        self.assertEqual(body["checks"]["geocoding"], "not_configured")
         self.assertIn("version", body)
         self.assertIn("timestamp", body)
 
@@ -39,7 +39,7 @@ class HealthCheckTests(APITestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json()["checks"]["openrouteservice"], "ok")
+        self.assertEqual(response.json()["checks"]["geocoding"], "ok")
 
     @override_settings(OPENROUTESERVICE_API_KEY="test-key")
     def test_openrouteservice_error_marks_degraded(self):
@@ -52,7 +52,7 @@ class HealthCheckTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         body = response.json()
         self.assertEqual(body["status"], "degraded")
-        self.assertEqual(body["checks"]["openrouteservice"], "error")
+        self.assertEqual(body["checks"]["geocoding"], "error")
 
     @override_settings(OPENROUTESERVICE_API_KEY="test-key")
     def test_openrouteservice_rate_limit_is_non_fatal(self):
@@ -63,7 +63,7 @@ class HealthCheckTests(APITestCase):
             response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json()["checks"]["openrouteservice"], "rate_limited")
+        self.assertEqual(response.json()["checks"]["geocoding"], "rate_limited")
 
     def test_nws_not_configured_when_probe_disabled(self):
         response = self.client.get(self.url)
