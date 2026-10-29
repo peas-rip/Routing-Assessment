@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import responses
 from django.contrib.gis.geos import LineString
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from apps.routing.clients.osrm import RouteData
@@ -205,7 +205,6 @@ class ToLinestringTests(SimpleTestCase):
             to_linestring({"type": "LineString", "coordinates": [["a", "b"], ["c", "d"]]})
 
 
-@override_settings(OPENROUTESERVICE_API_KEY="test-key")
 class GenerateRoutesTests(TestCase):
     """F02 pipeline: fetch -> persist routes -> sample checkpoints."""
 

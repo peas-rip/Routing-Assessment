@@ -1,42 +1,47 @@
+"""Nominatim client parsing and transport errors."""
+
+
 import requests
 import responses
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
-from apps.geocoding.clients import openrouteservice
-from apps.geocoding.clients.openrouteservice import GeocodingClient
+from apps.geocoding.clients.nominatim import GeocodingClient, parse_search_payload
 from apps.geocoding.exceptions import (
     GeocodingProviderError,
     RateLimitError,
 )
 
-from .fixtures import MOCK_REVERSE_RESPONSE, MOCK_SEARCH_RESPONSE
+from .fixtures import (
+    MOCK_REVERSE_RESPONSE,
+    MOCK_SEARCH_RESPONSE,
+    NOMINATIM_REVERSE_URL,
+    NOMINATIM_SEARCH_URL,
+)
 
-SEARCH_URL = "https://api.openrouteservice.org/geocode/search"
-REVERSE_URL = "https://api.openrouteservice.org/geocode/reverse"
-EXPECTED_LABEL = MOCK_REVERSE_RESPONSE["properties"]["label"]
+SEARCH_URL = NOMINATIM_SEARCH_URL
+REVERSE_URL = NOMINATIM_REVERSE_URL
+EXPECTED_LABEL = MOCK_REVERSE_RESPONSE["display_name"]
 
 
-@override_settings(OPENROUTESERVICE_API_KEY="test-key")
 class GeocodingClientTests(TestCase):
     def make_client(self, **kwargs) -> GeocodingClient:
-        kwargs.setdefault("api_key", "test-key")
         return GeocodingClient(**kwargs)
 
     @responses.activate
-    def test_search_parses_features_into_results(self):
+    def test_search_parses_results(self):
         responses.add(responses.GET, SEARCH_URL, json=MOCK_SEARCH_RESPONSE, status=200)
 
         response = self.make_client().search("Springfield", limit=5)
 
         self.assertEqual(len(response.results), 2)
         first = response.results[0]
-        self.assertEqual(first["place_id"], "openstreetmap_4726946")
+        self.assertEqual(first["place_id"], "4726946")
         self.assertEqual(first["latitude"], 39.7817)
         self.assertEqual(first["longitude"], -89.6501)
         self.assertEqual(first["address"]["city"], "Springfield")
         self.assertEqual(first["address"]["state"], "IL")
-        self.assertEqual(first["type"], "address")
-        self.assertEqual(response.raw, MOCK_SEARCH_RESPONSE)
+        self.assertEqual(first["type"], "house")
+        self.assertEqual(response.raw["results"], MOCK_SEARCH_RESPONSE)
 
     @responses.activate
     def test_search_sends_expected_params(self):
@@ -45,34 +50,22 @@ class GeocodingClientTests(TestCase):
         def request_callback(request):
             captured["params"] = request.params
             captured["headers"] = request.headers
-            return (200, {}, "{}")
+            return (200, {}, "[]")
 
         responses.add_callback(responses.GET, SEARCH_URL, callback=request_callback)
 
         self.make_client().search("Springfield", limit=3, lat=39.78, lon=-89.65)
 
-        self.assertEqual(captured["params"]["text"], "Springfield")
-        self.assertEqual(captured["params"]["size"], "3")
-        self.assertEqual(captured["params"]["focus.point.lat"], "39.78")
-        self.assertEqual(captured["params"]["focus.point.lon"], "-89.65")
-        self.assertEqual(captured["headers"]["Authorization"], "test-key")
+        self.assertEqual(captured["params"]["q"], "Springfield")
+        self.assertEqual(captured["params"]["limit"], "3")
+        self.assertEqual(captured["params"]["format"], "json")
+        self.assertIn("addressdetails", captured["params"])
+        # Nominatim is keyless: no Authorization header is sent.
+        self.assertNotIn("Authorization", captured["headers"])
+        self.assertIn("User-Agent", captured["headers"])
 
     @responses.activate
-    def test_search_omits_focus_point_without_coords(self):
-        captured = {}
-
-        def request_callback(request):
-            captured["params"] = request.params
-            return (200, {}, "{}")
-
-        responses.add_callback(responses.GET, SEARCH_URL, callback=request_callback)
-
-        self.make_client().search("Springfield")
-
-        self.assertNotIn("focus.point.lat", captured["params"])
-
-    @responses.activate
-    def test_reverse_parses_single_feature(self):
+    def test_reverse_parses_single_result(self):
         responses.add(responses.GET, REVERSE_URL, json=MOCK_REVERSE_RESPONSE, status=200)
 
         response = self.make_client().reverse(39.7817, -89.6501)
@@ -89,7 +82,7 @@ class GeocodingClientTests(TestCase):
 
     @responses.activate
     def test_reverse_returns_none_for_unparseable_payload(self):
-        responses.add(responses.GET, REVERSE_URL, json={"geometry": None}, status=200)
+        responses.add(responses.GET, REVERSE_URL, json={"error": "Unable to geocode"}, status=200)
 
         self.assertIsNone(self.make_client().reverse(39.7817, -89.6501))
 
@@ -149,24 +142,22 @@ class GeocodingClientTests(TestCase):
         with self.assertRaises(GeocodingProviderError):
             self.make_client().search("Springfield")
 
-    @override_settings(OPENROUTESERVICE_API_KEY="")
-    def test_missing_api_key_raises_provider_error(self):
-        client = GeocodingClient(api_key="")
+    @responses.activate
+    def test_malformed_coordinates_are_skipped(self):
+        payload = [{"display_name": "x", "lat": "bad", "lon": "-89.6"}]
+        responses.add(responses.GET, SEARCH_URL, json=payload, status=200)
 
-        with self.assertRaises(GeocodingProviderError):
-            client.search("Springfield")
+        results = self.make_client().search("Springfield").results
+
+        self.assertEqual(results, [])
 
     def test_parser_handles_malformed_features(self):
-        payload = {
-            "features": [
-                None,
-                {"geometry": None},
-                {"geometry": {"coordinates": []}},
-                {"geometry": {"coordinates": [-89.6, 39.7]}, "properties": {}},
-            ]
-        }
-        results = openrouteservice.parse_search_payload(payload)
+        payload = [
+            None,
+            {"lat": "bad", "lon": "-89.6"},
+            {"lat": "39.7", "lon": "-89.6", "display_name": "ok"},
+        ]
+        results = parse_search_payload(payload)
 
-        # Fourth feature lacks label/name but has coordinates: kept with empty label.
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["latitude"], 39.7)

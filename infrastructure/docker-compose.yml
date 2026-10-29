@@ -52,6 +52,9 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY:-}
+      - NOMINATIM_BASE_URL=${NOMINATIM_BASE_URL:-https://nominatim.openstreetmap.org}
+      - NOMINATIM_USER_AGENT=${NOMINATIM_USER_AGENT:-Routing-Assessment/1.0}
+      - NOMINATIM_HEALTHCHECK_ENABLED=${NOMINATIM_HEALTHCHECK_ENABLED:-0}
       - OPEN_METEO_BASE_URL=${OPEN_METEO_BASE_URL:-https://api.open-meteo.com/v1/forecast}
       - OPEN_METEO_HEALTHCHECK_ENABLED=${OPEN_METEO_HEALTHCHECK_ENABLED:-0}
 
@@ -75,6 +78,9 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY:-}
+      - NOMINATIM_BASE_URL=${NOMINATIM_BASE_URL:-https://nominatim.openstreetmap.org}
+      - NOMINATIM_USER_AGENT=${NOMINATIM_USER_AGENT:-Routing-Assessment/1.0}
+      - NOMINATIM_HEALTHCHECK_ENABLED=${NOMINATIM_HEALTHCHECK_ENABLED:-0}
       - OPEN_METEO_BASE_URL=${OPEN_METEO_BASE_URL:-https://api.open-meteo.com/v1/forecast}
       - OPEN_METEO_HEALTHCHECK_ENABLED=${OPEN_METEO_HEALTHCHECK_ENABLED:-0}
       # django owns migrations; running them from both services races on

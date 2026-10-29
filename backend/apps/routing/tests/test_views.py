@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import responses
 from django.conf import settings
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -139,7 +139,6 @@ class GenerateViewTests(TestCase):
         self.assertEqual(RouteDetailView.throttle_scope, "route-status")
 
 
-@override_settings(OPENROUTESERVICE_API_KEY="test-key")
 class RouteStatusViewTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -277,7 +276,6 @@ class RouteStatusViewTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
-@override_settings(OPENROUTESERVICE_API_KEY="test-key")
 class GenerateViewPayloadHandlingTests(TestCase):
     """Validated payload flattening into RouteRequest columns."""
 

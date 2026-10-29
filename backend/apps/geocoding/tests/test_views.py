@@ -2,7 +2,7 @@
 
 import responses
 from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -11,11 +11,10 @@ from apps.geocoding.models import GeocodeCache, QueryType
 
 from .fixtures import MOCK_REVERSE_RESPONSE, MOCK_SEARCH_RESPONSE
 
-SEARCH_URL = "https://api.openrouteservice.org/geocode/search"
-REVERSE_URL = "https://api.openrouteservice.org/geocode/reverse"
+SEARCH_URL = "https://nominatim.openstreetmap.org/search"
+REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 
 
-@override_settings(OPENROUTESERVICE_API_KEY="test-key")
 class GeocodingApiTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -44,13 +43,13 @@ class GeocodingApiTests(TestCase):
             set(first.keys()),
             {"place_id", "display_name", "latitude", "longitude", "address", "type"},
         )
-        self.assertEqual(first["place_id"], "openstreetmap_4726946")
+        self.assertEqual(first["place_id"], "4726946")
         self.assertEqual(first["latitude"], 39.7817)
         self.assertEqual(first["longitude"], -89.6501)
         self.assertEqual(first["address"]["city"], "Springfield")
         self.assertEqual(first["address"]["state"], "IL")
         self.assertEqual(first["address"]["postcode"], "62701")
-        self.assertEqual(first["type"], "address")
+        self.assertEqual(first["type"], "house")
 
     @responses.activate
     def test_search_second_request_is_cached(self):
@@ -117,7 +116,7 @@ class GeocodingApiTests(TestCase):
             set(data.keys()),
             {"place_id", "display_name", "latitude", "longitude", "address", "type"},
         )
-        self.assertEqual(data["place_id"], "openstreetmap_4726946")
+        self.assertEqual(data["place_id"], "4726946")
 
     def test_reverse_missing_coordinates_returns_validation_error(self):
         response = self.client.get(self.reverse_url)
@@ -145,7 +144,7 @@ class GeocodingApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
         error = response.json()["error"]
         self.assertEqual(error["code"], "GEOCODING_FAILED")
-        self.assertEqual(error["details"]["provider"], "openrouteservice")
+        self.assertEqual(error["details"]["provider"], "nominatim")
 
     @responses.activate
     def test_provider_rate_limit_returns_429(self):

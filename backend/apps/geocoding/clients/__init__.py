@@ -1,3 +1,3 @@
-from .openrouteservice import GeocodingClient
+from .nominatim import GeocodingClient
 
 __all__ = ["GeocodingClient"]

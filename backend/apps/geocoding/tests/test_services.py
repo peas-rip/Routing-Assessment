@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.geocoding import services
-from apps.geocoding.clients.openrouteservice import GeocodeResponse
+from apps.geocoding.clients.nominatim import GeocodeResponse
 from apps.geocoding.exceptions import GeocodingNotFoundError, GeocodingProviderError
 from apps.geocoding.models import GeocodeCache, QueryType
 
@@ -21,31 +21,31 @@ class GeocodingServiceTestBase(TestCase):
         self.search_response = GeocodeResponse(
             results=[
                 {
-                    "place_id": "openstreetmap_4726946",
+                    "place_id": "4726946",
                     "display_name": "123 Main St, Springfield, IL 62701, United States",
                     "latitude": 39.7817,
                     "longitude": -89.6501,
                     "address": EXPECTED_FIRST_RESULT["address"],
-                    "type": "address",
+                    "type": "house",
                 },
                 {
-                    "place_id": "openstreetmap_4726947",
+                    "place_id": "4726947",
                     "display_name": "456 Oak Ave, Springfield, IL 62701, United States",
                     "latitude": 39.7917,
                     "longitude": -89.6401,
                     "address": {"house_number": "456", "road": "Oak Ave"},
-                    "type": "address",
+                    "type": "house",
                 },
             ],
             raw=MOCK_SEARCH_RESPONSE,
         )
         self.reverse_result = {
-            "place_id": "openstreetmap_4726946",
+            "place_id": "4726946",
             "display_name": "123 Main St, Springfield, IL 62701, United States",
             "latitude": 39.7817,
             "longitude": -89.6501,
             "address": EXPECTED_FIRST_RESULT["address"],
-            "type": "address",
+            "type": "house",
         }
         self.reverse_response = GeocodeResponse(
             results=[self.reverse_result], raw=MOCK_REVERSE_RESPONSE
@@ -66,7 +66,7 @@ class SearchServiceTests(GeocodingServiceTestBase):
 
         self.assertFalse(was_cached)
         self.assertEqual(len(results), 2)
-        self.assertEqual(results[0]["place_id"], "openstreetmap_4726946")
+        self.assertEqual(results[0]["place_id"], "4726946")
         self.client_mock.search.assert_called_once_with("Springfield", limit=2, lat=None, lon=None)
 
     def test_cache_miss_stores_db_row(self):
@@ -78,7 +78,7 @@ class SearchServiceTests(GeocodingServiceTestBase):
         self.assertEqual(entry.display_name, EXPECTED_FIRST_RESULT["display_name"])
         self.assertEqual(entry.latitude, 39.7817)
         self.assertEqual(entry.raw_response, MOCK_SEARCH_RESPONSE)
-        self.assertEqual(entry.source, "openrouteservice")
+        self.assertEqual(entry.source, "nominatim")
         self.assertGreater(entry.expires_at, timezone.now() + timedelta(days=29))
 
     def test_second_call_served_from_redis_cache(self):
@@ -134,7 +134,7 @@ class SearchServiceTests(GeocodingServiceTestBase):
             display_name="old",
             address_components={},
             raw_response=MOCK_SEARCH_RESPONSE,
-            source="openrouteservice",
+            source="nominatim",
             expires_at=timezone.now() - timedelta(minutes=1),
         )
 
@@ -197,7 +197,7 @@ class ReverseServiceTests(GeocodingServiceTestBase):
         result, was_cached = services.reverse(39.7817, -89.6501)
 
         self.assertFalse(was_cached)
-        self.assertEqual(result["place_id"], "openstreetmap_4726946")
+        self.assertEqual(result["place_id"], "4726946")
         self.client_mock.reverse.assert_called_once_with(39.7817, -89.6501)
 
     def test_reverse_stores_db_row_with_coordinate_key(self):
@@ -212,7 +212,7 @@ class ReverseServiceTests(GeocodingServiceTestBase):
         result, was_cached = services.reverse(39.7817, -89.6501)
 
         self.assertTrue(was_cached)
-        self.assertEqual(result["place_id"], "openstreetmap_4726946")
+        self.assertEqual(result["place_id"], "4726946")
         self.client_mock.reverse.assert_called_once()
 
     def test_reverse_db_fallback_when_redis_empty(self):

@@ -122,6 +122,11 @@ OPENROUTESERVICE_API_KEY = env("OPENROUTESERVICE_API_KEY", default="")
 OPENROUTESERVICE_BASE_URL = env(
     "OPENROUTESERVICE_BASE_URL", default="https://api.openrouteservice.org"
 )
+NOMINATIM_BASE_URL = env(
+    "NOMINATIM_BASE_URL", default="https://nominatim.openstreetmap.org"
+)
+NOMINATIM_USER_AGENT = env("NOMINATIM_USER_AGENT", default="Routing-Assessment/1.0")
+NOMINATIM_HEALTHCHECK_ENABLED = env.bool("NOMINATIM_HEALTHCHECK_ENABLED", default=False)
 EXTERNAL_API_TIMEOUT = env.float("EXTERNAL_API_TIMEOUT", default=5.0)
 # Routing calls carry full geometries + alternatives; they get a longer budget.
 ROUTING_TIMEOUT = env.float("ROUTING_TIMEOUT", default=30.0)

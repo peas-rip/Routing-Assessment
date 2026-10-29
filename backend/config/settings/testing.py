@@ -18,6 +18,7 @@ DEBUG = False
 # is deterministic. Open-Meteo is keyless; its opt-in health probe stays off.
 OPENROUTESERVICE_API_KEY = ""
 OPEN_METEO_HEALTHCHECK_ENABLED = False
+NOMINATIM_HEALTHCHECK_ENABLED = False
 
 POSTGIS_ENGINE = "django.contrib.gis.db.backends.postgis"
 

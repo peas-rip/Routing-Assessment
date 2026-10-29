@@ -22,29 +22,35 @@ class HealthCheckTests(APITestCase):
         self.assertEqual(body["status"], "healthy")
         self.assertEqual(body["checks"]["database"], "ok")
         self.assertEqual(body["checks"]["redis"], "ok")
-        self.assertEqual(body["checks"]["openrouteservice"], "not_configured")
+        self.assertEqual(body["checks"]["nominatim"], "not_configured")
         self.assertIn("version", body)
         self.assertIn("timestamp", body)
 
-    @override_settings(OPENROUTESERVICE_API_KEY="test-key")
+    def test_nominatim_not_configured_when_probe_disabled(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["checks"]["nominatim"], "not_configured")
+
+    @override_settings(NOMINATIM_HEALTHCHECK_ENABLED=True)
     @responses.activate
-    def test_openrouteservice_ok_when_configured(self):
+    def test_nominatim_ok_when_enabled(self):
         responses.add(
             responses.GET,
-            "https://api.openrouteservice.org/geocode/search",
-            json={"features": []},
+            "https://nominatim.openstreetmap.org/search",
+            json=[{"place_id": 1, "display_name": "x", "lat": "39.78", "lon": "-89.65"}],
             status=200,
         )
 
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json()["checks"]["openrouteservice"], "ok")
+        self.assertEqual(response.json()["checks"]["nominatim"], "ok")
 
-    @override_settings(OPENROUTESERVICE_API_KEY="test-key")
-    def test_openrouteservice_error_marks_degraded(self):
+    @override_settings(NOMINATIM_HEALTHCHECK_ENABLED=True)
+    def test_nominatim_error_marks_degraded(self):
         with patch(
-            "apps.geocoding.clients.openrouteservice.GeocodingClient.search",
+            "apps.geocoding.clients.nominatim.GeocodingClient.search",
             side_effect=GeocodingProviderError(),
         ):
             response = self.client.get(self.url)
@@ -52,18 +58,18 @@ class HealthCheckTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         body = response.json()
         self.assertEqual(body["status"], "degraded")
-        self.assertEqual(body["checks"]["openrouteservice"], "error")
+        self.assertEqual(body["checks"]["nominatim"], "error")
 
-    @override_settings(OPENROUTESERVICE_API_KEY="test-key")
-    def test_openrouteservice_rate_limit_is_non_fatal(self):
+    @override_settings(NOMINATIM_HEALTHCHECK_ENABLED=True)
+    def test_nominatim_rate_limit_is_non_fatal(self):
         with patch(
-            "apps.geocoding.clients.openrouteservice.GeocodingClient.search",
+            "apps.geocoding.clients.nominatim.GeocodingClient.search",
             side_effect=RateLimitError(60),
         ):
             response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json()["checks"]["openrouteservice"], "rate_limited")
+        self.assertEqual(response.json()["checks"]["nominatim"], "rate_limited")
 
     def test_openmeteo_not_configured_when_probe_disabled(self):
         response = self.client.get(self.url)

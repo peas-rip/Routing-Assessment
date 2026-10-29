@@ -22,7 +22,6 @@ from .fixtures import (
 )
 
 
-@override_settings(OPENROUTESERVICE_API_KEY="test-key")
 class GenerateRoutesTaskTests(TestCase):
     @responses.activate
     def test_success_completes_request(self):

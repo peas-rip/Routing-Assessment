@@ -9,7 +9,8 @@ route by balancing weather risk and travel time.
 - **Database**: PostgreSQL + PostGIS (via Docker Compose)
 - **Cache/Queue**: Redis + Celery
 - **Providers**:
-  - Routing & geocoding: OSRM (keyless, active) + OpenRouteService (geocoding, key required)
+  - Routing: OSRM (keyless)
+  - Geocoding: Nominatim (keyless, OpenStreetMap)
   - Weather: Open-Meteo (no API key; see licensing below)
 
 ### Running the backend
