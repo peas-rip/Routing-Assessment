@@ -54,7 +54,7 @@ export default function RouteInput() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md space-y-4 bg-slate-900 p-6 rounded-xl border border-slate-800">
+      <div className="card fade-in w-full max-w-md space-y-4 bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-2xl">
         <h1 className="text-2xl font-bold">Weather-Aware Truck Routing</h1>
         <p className="text-sm text-slate-400">Pick the safest route by balancing weather and time.</p>
 
@@ -65,7 +65,7 @@ export default function RouteInput() {
           <label className="block text-sm text-slate-400 mb-1">Departure time</label>
           <input
             type="datetime-local"
-            className="w-full p-2 rounded bg-slate-800 border border-slate-700"
+            className="w-full p-2 rounded bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={departAt}
             onChange={(e) => setDepartAt(e.target.value)}
           />
@@ -76,7 +76,7 @@ export default function RouteInput() {
             <label className="block text-sm text-slate-400 mb-1">Load weight (lb)</label>
             <input
               type="number"
-              className="w-full p-2 rounded bg-slate-800 border border-slate-700"
+              className="w-full p-2 rounded bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={loadWeight}
               onChange={(e) => setLoadWeight(Number(e.target.value))}
             />
@@ -84,7 +84,7 @@ export default function RouteInput() {
           <div>
             <label className="block text-sm text-slate-400 mb-1">Checkpoint interval (mi)</label>
             <select
-              className="w-full p-2 rounded bg-slate-800 border border-slate-700"
+              className="w-full p-2 rounded bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={interval}
               onChange={(e) => setIntervalMiles(Number(e.target.value))}
             >
